@@ -1,0 +1,15 @@
+[workspace]
+members = [
+  "contracts/campaign",
+  "contracts/verifier",
+  "contracts/mock_token"
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+repository = "https://example.invalid/lumen-aid"
+
+[workspace.dependencies]
+soroban-sdk = "27.0.0-rc.1"

@@ -1,0 +1,41 @@
+{
+  "name": "lumen-aid",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Lumen - private aid rails on Stellar.",
+  "packageManager": "pnpm@11.7.0",
+  "scripts": {
+    "dev": "pnpm --filter @lumen-aid/web dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm zk:test && pnpm -r --workspace-concurrency=1 test",
+    "zk:doctor": "tsx circuits/claim/scripts/doctor.ts",
+    "zk:setup": "tsx circuits/claim/scripts/setup.ts",
+    "zk:clean": "tsx circuits/claim/scripts/clean.ts",
+    "zk:build": "tsx circuits/claim/scripts/build.ts",
+    "zk:build:dev": "tsx circuits/claim/scripts/build-dev.ts",
+    "zk:proof:path": "tsx circuits/claim/scripts/proof-path.ts",
+    "zk:prove:demo": "tsx circuits/claim/scripts/prove-demo.ts",
+    "zk:verify:local": "tsx circuits/claim/scripts/verify-local.ts",
+    "zk:test": "vitest run circuits/claim/scripts/zk.test.ts",
+    "demo:e2e": "tsx scripts/demo-e2e.ts",
+    "stellar:doctor": "tsx scripts/stellar-doctor.ts",
+    "contracts:build": "tsx scripts/contracts-build.ts",
+    "stellar:deploy:testnet": "tsx scripts/stellar-deploy-testnet.ts",
+    "stellar:init-campaign:testnet": "tsx scripts/stellar-init-campaign-testnet.ts",
+    "stellar:claim:alice:testnet": "tsx scripts/stellar-claim-alice-testnet.ts",
+    "stellar:claim:alice-duplicate:testnet": "tsx scripts/stellar-claim-alice-duplicate-testnet.ts",
+    "contracts:test": "cargo test -p lumen_verifier && cargo test -p lumen_campaign && cargo test -p lumen_mock_token",
+    "contracts:test:dev": "cargo test -p lumen_verifier --features dev_verifier && cargo test -p lumen_campaign --features dev_verifier && cargo test -p lumen_mock_token"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.10",
+    "@types/snarkjs": "^0.7.9",
+    "circomlib": "^2.0.5",
+    "snarkjs": "^0.7.6",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.9"
+  }
+}
