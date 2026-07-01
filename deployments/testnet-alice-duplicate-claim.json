@@ -1,0 +1,12 @@
+{
+  "network": "testnet",
+  "status": "duplicate_rejected",
+  "campaignContractId": "CCICXWSMCEY47JF2OWQ3OQMZEHVC5URNCWELWHQ2YRJEI2ETWKUAXCWI",
+  "verifierContractId": "CCHDSG4NLE4IWNGXOR46OYQRAW7KA4VQQB7NF4BTRH3D4HJIRBDLRR7D",
+  "nullifierHash": "0x304839a43cd2b03a7c030591abb845e56e4fa662d30f2540656df7b825887c66",
+  "rejectedAt": "2026-07-01T16:27:59.653Z",
+  "expectedContractError": "DuplicateNullifier #10",
+  "localCryptographicProofVerification": "real",
+  "onChainCryptographicProofVerification": "real",
+  "notes": "Second submission used Alice's same public nullifier and Groth16 proof. The deployed campaign rejected it as a duplicate."
+}

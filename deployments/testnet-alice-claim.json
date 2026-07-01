@@ -1,0 +1,12 @@
+{
+  "network": "testnet",
+  "status": "accepted",
+  "campaignContractId": "CCICXWSMCEY47JF2OWQ3OQMZEHVC5URNCWELWHQ2YRJEI2ETWKUAXCWI",
+  "verifierContractId": "CCHDSG4NLE4IWNGXOR46OYQRAW7KA4VQQB7NF4BTRH3D4HJIRBDLRR7D",
+  "nullifierHash": "0x304839a43cd2b03a7c030591abb845e56e4fa662d30f2540656df7b825887c66",
+  "amount": 125,
+  "claimedAt": "2026-07-01T16:27:44.412Z",
+  "localCryptographicProofVerification": "real",
+  "onChainCryptographicProofVerification": "real",
+  "notes": "Alice proof was generated locally with snarkjs, verified locally, accepted by the deployed testnet verifier in simulation, and submitted to the campaign contract."
+}

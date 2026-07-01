@@ -1,0 +1,9 @@
+{
+  "network": "testnet",
+  "campaignContractId": "CCICXWSMCEY47JF2OWQ3OQMZEHVC5URNCWELWHQ2YRJEI2ETWKUAXCWI",
+  "verifierContractId": "CCHDSG4NLE4IWNGXOR46OYQRAW7KA4VQQB7NF4BTRH3D4HJIRBDLRR7D",
+  "mockTokenContractId": "CDCH6ECKA3EHYT7KO3ZXE275W2YCO7PAHRX4G2KGXNIZLFID5HFAFFC7",
+  "deployerPublicKey": "GA4SHBKMWY33KHX5C3QNX6DTRRVARVMPBANAY7HLWMHWI6ONW6VN2WK7",
+  "deployedAt": "2026-07-01T16:16:49.711Z",
+  "notes": "Deployed current Lumen verifier, campaign, and mock token contracts to Stellar testnet. Verifier build uses the default real Groth16 path; dev_verifier feature was not enabled."
+}

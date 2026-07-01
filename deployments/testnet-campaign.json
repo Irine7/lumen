@@ -1,0 +1,18 @@
+{
+  "network": "testnet",
+  "campaignContractId": "CCICXWSMCEY47JF2OWQ3OQMZEHVC5URNCWELWHQ2YRJEI2ETWKUAXCWI",
+  "verifierContractId": "CCHDSG4NLE4IWNGXOR46OYQRAW7KA4VQQB7NF4BTRH3D4HJIRBDLRR7D",
+  "mockTokenContractId": "CDCH6ECKA3EHYT7KO3ZXE275W2YCO7PAHRX4G2KGXNIZLFID5HFAFFC7",
+  "campaignId": "0x0026b8888700a5d67d4a5374656c6c61722d6169642d7261696c732d30303101",
+  "eligibilityRoot": "0x1533dddeb2e62943d31b07f72e99112fca3a7f0b21c5804ea27113c8e60d737a",
+  "policyHash": "0x1f0f1c8d9e2215a08b69345882c8850b778b85f0346f02c7c2a610f51d41aa21",
+  "operator": "GA4SHBKMWY33KHX5C3QNX6DTRRVARVMPBANAY7HLWMHWI6ONW6VN2WK7",
+  "asset": "CDCH6ECKA3EHYT7KO3ZXE275W2YCO7PAHRX4G2KGXNIZLFID5HFAFFC7",
+  "budget": "1000",
+  "perRecipientCap": "250",
+  "startLedger": 1,
+  "endLedger": 4294967295,
+  "initializedAt": "2026-07-01T16:32:12.940Z",
+  "mode": "real_groth16_verifier",
+  "notes": "Deterministic demo campaign initialized on Stellar testnet with the same eligibility root and policy hash used by the local demo."
+}
