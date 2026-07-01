@@ -1,0 +1,21 @@
+[package]
+name = "lumen_campaign"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+dev_verifier = ["lumen_verifier/dev_verifier"]
+testutils = ["soroban-sdk/testutils"]
+
+[dependencies]
+lumen_verifier = { path = "../verifier", default-features = false }
+soroban-sdk = { workspace = true }
+
+[dev-dependencies]
+lumen_verifier = { path = "../verifier", default-features = false, features = ["testutils"] }
+soroban-sdk = { workspace = true, features = ["testutils"] }
