@@ -1,0 +1,142 @@
+"use client";
+
+import { useState } from "react";
+import { AlertTriangle, Play } from "lucide-react";
+import type { ClaimProofResult, DemoRecipient } from "@lumen-aid/shared";
+import { verifyClaimProofLocally } from "@lumen-aid/prover";
+import {
+  Button,
+  CodeBlock,
+  KeyValue,
+  Panel,
+  PanelHeader,
+  StatusDot,
+  VerifierStatusBadge
+} from "@/components/ui";
+import { useLumenDemo } from "@/lib/demo-runtime";
+
+export function DebugClient() {
+  const { campaign, recipients, tree, generateProof } = useLumenDemo();
+  const [selectedId, setSelectedId] = useState<DemoRecipient["id"]>("alice");
+  const [amount, setAmount] = useState(125);
+  const [proofResult, setProofResult] = useState<ClaimProofResult | null>(null);
+  const [localVerifierOk, setLocalVerifierOk] = useState<boolean | null>(null);
+  const selected = recipients.find((recipient) => recipient.id === selectedId) ?? recipients[0]!;
+
+  async function inspect() {
+    const result = await generateProof(selected, amount);
+    setProofResult(result);
+    setLocalVerifierOk(await verifyClaimProofLocally(result.proof, result.publicInputs));
+  }
+
+  return (
+    <div className="grid gap-6">
+      <div className="rounded-lg border border-[#ffc857]/45 bg-[#ffc857]/10 p-4">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-[#ffc857]" />
+          <div>
+            <h1 className="text-sm font-semibold text-[#ffe4a3]">
+              Demo debug mode. Do not use with real recipient data.
+            </h1>
+            <p className="mt-1 text-sm leading-6 text-[#d8e7ec]">
+              This route intentionally exposes private witness material for inspecting synthetic fixtures.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <Panel>
+        <PanelHeader
+          title="Developer proof inspector"
+          description="Demo-only page: full private witness is intentionally visible here for protocol inspection."
+          action={
+            <div className="flex flex-col gap-2 sm:items-end">
+              <VerifierStatusBadge status="dev_on_chain" />
+              <StatusDot
+                tone={localVerifierOk === null ? "neutral" : localVerifierOk ? "green" : "red"}
+                label={
+                  localVerifierOk === null
+                    ? "No proof inspected"
+                    : localVerifierOk
+                      ? "Demo verifier accepted"
+                      : "Demo verifier rejected"
+                }
+              />
+            </div>
+          }
+        />
+        <div className="grid gap-4 p-5 sm:grid-cols-[1fr_160px_180px]">
+          <label className="grid gap-2 text-sm text-[#d8e7ec]">
+            Recipient
+            <select
+              value={selectedId}
+              onChange={(event) => setSelectedId(event.target.value as DemoRecipient["id"])}
+              className="h-11 rounded-lg border border-[#2b3845] bg-[#080b0f] px-3 text-sm text-white outline-none focus:border-[#51d6ff]"
+            >
+              {recipients.map((recipient) => (
+                <option key={recipient.id} value={recipient.id}>
+                  {recipient.displayName}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-2 text-sm text-[#d8e7ec]">
+            Amount
+            <input
+              type="number"
+              value={amount}
+              onChange={(event) => setAmount(Number(event.target.value))}
+              className="h-11 rounded-lg border border-[#2b3845] bg-[#080b0f] px-3 text-sm text-white outline-none focus:border-[#51d6ff]"
+            />
+          </label>
+          <div className="flex items-end">
+            <Button type="button" onClick={inspect} className="w-full">
+              <Play className="h-4 w-4" />
+              Inspect
+            </Button>
+          </div>
+        </div>
+      </Panel>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Panel>
+          <PanelHeader title="Proof markers" />
+          <dl className="p-5">
+            <KeyValue label="Merkle root" value={campaign.eligibilityRoot} />
+            <KeyValue label="Nullifier" value={proofResult?.publicInputs.nullifierHash ?? "generate first"} />
+            <KeyValue label="Public inputs hash" value={proofResult?.proof.publicInputsHash ?? "generate first"} />
+            <KeyValue label="Proof mode" value={proofResult?.mode ?? "dev_verifier"} />
+            <KeyValue label="Browser verifier status" value="Dev-only on-chain verifier" />
+            <KeyValue
+              label="Documented real paths"
+              value="Real local Groth16 scripts and real deployed testnet verification are documented outside this browser flow"
+            />
+            <KeyValue label="Constraint status" value={proofResult?.ok ? "passed" : proofResult ? "failed" : "not run"} />
+          </dl>
+        </Panel>
+
+        <Panel>
+          <PanelHeader title="Merkle tree" />
+          <CodeBlock value={{ root: tree.root, layers: tree.layers }} />
+        </Panel>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Panel>
+          <PanelHeader title="Private inputs" description="Visible only on this debug route." />
+          <div className="p-5">
+            <CodeBlock value={proofResult?.privateInputs ?? "No private witness generated"} />
+          </div>
+        </Panel>
+
+        <Panel>
+          <PanelHeader title="Public inputs and proof" />
+          <div className="grid gap-4 p-5">
+            <CodeBlock value={proofResult?.publicInputs ?? "No public inputs generated"} />
+            <CodeBlock value={proofResult?.proof ?? "No proof generated"} />
+          </div>
+        </Panel>
+      </div>
+    </div>
+  );
+}
