@@ -2,7 +2,29 @@
 
 mod groth16_claim_v0;
 
-use soroban_sdk::{contract, contractimpl, contracttype, Bytes, BytesN, Env};
+use soroban_sdk::{contract, contractimpl, contracttype, Bytes, BytesN, Env, Symbol};
+
+const VERIFIER_ID_BYTES: [u8; 32] = [
+    0xa9, 0x4e, 0xd2, 0x52, 0x7a, 0xbc, 0xae, 0x4a, 0xe9, 0x78, 0x96, 0x0c, 0x7f, 0x82, 0x14, 0x20,
+    0x7c, 0x91, 0xef, 0xfc, 0x5d, 0x26, 0xe6, 0xc3, 0x61, 0xe1, 0xc9, 0x03, 0x56, 0x86, 0x0c, 0x32,
+];
+
+const CIRCUIT_ID_BYTES: [u8; 32] = [
+    0x08, 0x60, 0x3c, 0xc4, 0x1a, 0xc9, 0xb9, 0x90, 0xfc, 0x5f, 0xf0, 0xb8, 0xe0, 0x36, 0x73, 0xb9,
+    0xda, 0xb1, 0x4c, 0x54, 0x20, 0x2d, 0xde, 0xf9, 0x3e, 0x70, 0x8e, 0xf9, 0xa3, 0xf5, 0x8f, 0xbc,
+];
+
+#[cfg(not(feature = "dev_verifier"))]
+const REAL_VERIFICATION_KEY_HASH_BYTES: [u8; 32] = [
+    0xc0, 0xba, 0x74, 0x7b, 0x09, 0xaa, 0x4b, 0xad, 0x0c, 0x4e, 0x10, 0xe9, 0x81, 0xff, 0x9c, 0xd2,
+    0x33, 0xf6, 0xf7, 0xff, 0x68, 0x07, 0x93, 0xd2, 0xe2, 0x4b, 0xf6, 0x85, 0xf1, 0x1d, 0x84, 0x3f,
+];
+
+#[cfg(feature = "dev_verifier")]
+const DEV_VERIFICATION_KEY_HASH_BYTES: [u8; 32] = [
+    0xf4, 0xfb, 0x87, 0x8a, 0xa7, 0xde, 0xa2, 0xc3, 0xcf, 0x12, 0xec, 0x9e, 0x7a, 0xc4, 0xd2, 0x48,
+    0x7e, 0x4f, 0xc3, 0x60, 0xf1, 0x5d, 0x4d, 0x1b, 0x0d, 0xb6, 0x8c, 0xeb, 0xf6, 0xc8, 0xa1, 0xfd,
+];
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -17,11 +39,34 @@ pub struct ClaimPublicInputs {
     pub max_amount: i128,
 }
 
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VerifierInfo {
+    pub verifier_id: BytesN<32>,
+    pub circuit_id: BytesN<32>,
+    pub verification_key_hash: BytesN<32>,
+    pub mode: Symbol,
+    pub version: Symbol,
+}
+
 #[contract]
 pub struct VerifierContract;
 
 #[contractimpl]
 impl VerifierContract {
+    pub fn verifier_info(env: Env) -> VerifierInfo {
+        VerifierInfo {
+            verifier_id: BytesN::from_array(&env, &VERIFIER_ID_BYTES),
+            circuit_id: BytesN::from_array(&env, &CIRCUIT_ID_BYTES),
+            verification_key_hash: BytesN::from_array(
+                &env,
+                verification_key_hash_bytes(),
+            ),
+            mode: Symbol::new(&env, verifier_mode()),
+            version: Symbol::new(&env, "claim_v0"),
+        }
+    }
+
     pub fn verify_claim(env: Env, public_inputs: ClaimPublicInputs, proof: Bytes) -> bool {
         #[cfg(feature = "dev_verifier")]
         {
@@ -33,6 +78,26 @@ impl VerifierContract {
             groth16_claim_v0::verify_claim(&env, &public_inputs, &proof)
         }
     }
+}
+
+#[cfg(feature = "dev_verifier")]
+fn verifier_mode() -> &'static str {
+    "dev_verifier"
+}
+
+#[cfg(not(feature = "dev_verifier"))]
+fn verifier_mode() -> &'static str {
+    "real_groth16"
+}
+
+#[cfg(feature = "dev_verifier")]
+fn verification_key_hash_bytes() -> &'static [u8; 32] {
+    &DEV_VERIFICATION_KEY_HASH_BYTES
+}
+
+#[cfg(not(feature = "dev_verifier"))]
+fn verification_key_hash_bytes() -> &'static [u8; 32] {
+    &REAL_VERIFICATION_KEY_HASH_BYTES
 }
 
 #[cfg(feature = "dev_verifier")]
@@ -125,6 +190,49 @@ mod test {
             amount: 100,
             max_amount: 250,
         }
+    }
+
+    #[test]
+    #[cfg(not(feature = "dev_verifier"))]
+    fn default_verifier_info_reports_real_groth16() {
+        let env = Env::default();
+        let contract_id = env.register(VerifierContract, ());
+        let client = VerifierContractClient::new(&env, &contract_id);
+
+        let info = client.verifier_info();
+
+        assert_eq!(info.mode, Symbol::new(&env, "real_groth16"));
+        assert_eq!(info.version, Symbol::new(&env, "claim_v0"));
+        assert_eq!(
+            info.verification_key_hash,
+            BytesN::from_array(&env, &REAL_VERIFICATION_KEY_HASH_BYTES)
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "dev_verifier")]
+    fn dev_verifier_info_reports_dev_verifier() {
+        let env = Env::default();
+        let contract_id = env.register(VerifierContract, ());
+        let client = VerifierContractClient::new(&env, &contract_id);
+
+        let info = client.verifier_info();
+
+        assert_eq!(info.mode, Symbol::new(&env, "dev_verifier"));
+        assert_eq!(info.version, Symbol::new(&env, "claim_v0"));
+        assert_eq!(
+            info.verification_key_hash,
+            BytesN::from_array(&env, &DEV_VERIFICATION_KEY_HASH_BYTES)
+        );
+    }
+
+    #[test]
+    fn verifier_info_is_stable_across_calls() {
+        let env = Env::default();
+        let contract_id = env.register(VerifierContract, ());
+        let client = VerifierContractClient::new(&env, &contract_id);
+
+        assert_eq!(client.verifier_info(), client.verifier_info());
     }
 
     #[test]
