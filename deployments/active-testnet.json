@@ -1,0 +1,56 @@
+{
+  "network": "testnet",
+  "campaignContractId": "CAY354EH72E5DDZDBESTBVWZGQBUWWWFT2VQPSPWSX6VM6VHVGDZNVBV",
+  "verifierContractId": "CAGAZHB5CH3OMGK4LKP2SU2I23B4CGMFVNN4DPOHP2C5EOLETS74KIEE",
+  "mockTokenContractId": "CDCH6ECKA3EHYT7KO3ZXE275W2YCO7PAHRX4G2KGXNIZLFID5HFAFFC7",
+  "campaignId": "0x00db21f02b2f6b410de2bb6ae97cbcf5c18bd512f2b614f9e4d78968d4e3170c",
+  "eligibilityRoot": "0x0f19873d9631b4d11143909ed70a9d4aa5592df67c00195b77d34fc9473dfa0e",
+  "policyHash": "0x1f0f1c8d9e2215a08b69345882c8850b778b85f0346f02c7c2a610f51d41aa21",
+  "operator": "GA4SHBKMWY33KHX5C3QNX6DTRRVARVMPBANAY7HLWMHWI6ONW6VN2WK7",
+  "asset": "CDCH6ECKA3EHYT7KO3ZXE275W2YCO7PAHRX4G2KGXNIZLFID5HFAFFC7",
+  "budget": "1000",
+  "perRecipientCap": "250",
+  "startLedger": 1,
+  "endLedger": 4294967295,
+  "createdAt": "2026-07-02T11:22:44.099Z",
+  "verifierInfo": {
+    "mode": "real_groth16",
+    "version": "claim_v0",
+    "verifierId": "a94ed2527abcae4ae978960c7f8214207c91effc5d26e6c361e1c90356860c32",
+    "circuitId": "08603cc41ac9b990fc5ff0b8e03673b9dab14c54202ddef93e708ef9a3f58fbc",
+    "verificationKeyHash": "c0ba747b09aa4bad0c4e10e981ff9cd233f6f7ff680793d2e24bf685f11d843f"
+  },
+  "recipients": [
+    {
+      "id": "alice",
+      "displayName": "Alice",
+      "eligible": true,
+      "defaultClaimAmount": 125
+    },
+    {
+      "id": "bob",
+      "displayName": "Bob",
+      "eligible": true,
+      "defaultClaimAmount": 175
+    },
+    {
+      "id": "charlie",
+      "displayName": "Charlie",
+      "eligible": true,
+      "defaultClaimAmount": 150
+    },
+    {
+      "id": "dora",
+      "displayName": "Dora",
+      "eligible": true,
+      "defaultClaimAmount": 100
+    },
+    {
+      "id": "mallory",
+      "displayName": "Mallory",
+      "eligible": false,
+      "defaultClaimAmount": 125
+    }
+  ],
+  "notes": "Public active Stellar testnet deployment. Recipient secrets, witness data, Merkle paths, and private inputs are intentionally not written here."
+}

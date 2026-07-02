@@ -53,6 +53,33 @@ export const demoRecipients: DemoRecipient[] = [
   }
 ];
 
+export const testnetDemoRecipients: DemoRecipient[] = [
+  ...demoRecipients.filter((recipient) => recipient.id !== "mallory"),
+  {
+    id: "charlie",
+    displayName: "Charlie",
+    eligibilityReason: "Temporary shelter relocation grant",
+    eligible: true,
+    recipientSecret: field("0x0c0ffee000000000000000000000c0de"),
+    identityHash: field("0x0caa551f1ed000000000000000000001"),
+    leafSalt: field("0x0c0a57ed000000000000000000000002"),
+    amountSalt: field("0x0c1a1a11c00000000000000000000003"),
+    defaultClaimAmount: 150
+  },
+  {
+    id: "dora",
+    displayName: "Dora",
+    eligibilityReason: "Food and essentials emergency grant",
+    eligible: true,
+    recipientSecret: field("0x0d0a000000000000000000000000d02a"),
+    identityHash: field("0x0d01a5afe00000000000000000000001"),
+    leafSalt: field("0x0d0a5a17000000000000000000000002"),
+    amountSalt: field("0x0d15b0b000000000000000000000003"),
+    defaultClaimAmount: 100
+  },
+  demoRecipients.find((recipient) => recipient.id === "mallory")!
+];
+
 export const demoCampaignSeed = {
   campaignId: DEMO_CAMPAIGN_ID,
   name: "Valencia Emergency Aid Pilot",

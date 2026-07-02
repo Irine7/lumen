@@ -1,0 +1,14 @@
+{
+  "asset": "CDCH6ECKA3EHYT7KO3ZXE275W2YCO7PAHRX4G2KGXNIZLFID5HFAFFC7",
+  "budget": "1000",
+  "campaign_id": "00db21f02b2f6b410de2bb6ae97cbcf5c18bd512f2b614f9e4d78968d4e3170c",
+  "deny_root": null,
+  "eligibility_root": "0f19873d9631b4d11143909ed70a9d4aa5592df67c00195b77d34fc9473dfa0e",
+  "end_ledger": 4294967295,
+  "is_active": true,
+  "operator": "GA4SHBKMWY33KHX5C3QNX6DTRRVARVMPBANAY7HLWMHWI6ONW6VN2WK7",
+  "per_recipient_cap": "250",
+  "policy_hash": "1f0f1c8d9e2215a08b69345882c8850b778b85f0346f02c7c2a610f51d41aa21",
+  "start_ledger": 1,
+  "verifier": "CAGAZHB5CH3OMGK4LKP2SU2I23B4CGMFVNN4DPOHP2C5EOLETS74KIEE"
+}

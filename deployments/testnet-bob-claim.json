@@ -1,0 +1,12 @@
+{
+  "network": "testnet",
+  "status": "accepted",
+  "campaignContractId": "CCICXWSMCEY47JF2OWQ3OQMZEHVC5URNCWELWHQ2YRJEI2ETWKUAXCWI",
+  "verifierContractId": "CCHDSG4NLE4IWNGXOR46OYQRAW7KA4VQQB7NF4BTRH3D4HJIRBDLRR7D",
+  "nullifierHash": "0x04f395c3991502f31accfd784150fe01b25bf3f79192547eb051c982a1e66aca",
+  "amount": 175,
+  "claimedAt": "2026-07-01T21:02:57.813Z",
+  "localCryptographicProofVerification": "real",
+  "onChainCryptographicProofVerification": "real",
+  "notes": "Bob proof was generated locally with snarkjs, verified locally, accepted by the deployed testnet verifier in simulation, and submitted to the campaign contract."
+}

@@ -344,15 +344,17 @@ export function formatCircuitInputs(
 export function createDemoCircuitCase(options: {
   recipientId: DemoRecipient["id"];
   amount?: number;
+  recipients?: DemoRecipient[];
   campaignOverride?: Partial<CampaignConfig>;
   merkleProofOverride?: MerkleProof | null;
 }): DemoCircuitCase {
-  const tree = buildDemoEligibilityTree();
+  const recipients = options.recipients ?? demoRecipients;
+  const tree = buildDemoEligibilityTree(recipients);
   const campaign = {
     ...createDemoCampaignConfig(tree),
     ...options.campaignOverride
   };
-  const recipient = demoRecipients.find((item) => item.id === options.recipientId);
+  const recipient = recipients.find((item) => item.id === options.recipientId);
 
   if (!recipient) {
     throw new Error(`Missing demo recipient: ${options.recipientId}`);

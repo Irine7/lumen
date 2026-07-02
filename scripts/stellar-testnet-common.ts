@@ -25,6 +25,12 @@ export const aliceDuplicateClaimPath = join(
   "deployments",
   "testnet-alice-duplicate-claim.json"
 );
+export const activeTestnetPath = join(repoRoot, "deployments", "active-testnet.json");
+export const activeCampaignConfigArgPath = join(
+  repoRoot,
+  "deployments",
+  "active-testnet-campaign-config.arg.json"
+);
 
 export interface CommandResult {
   status: number;
@@ -58,6 +64,42 @@ export interface TestnetCampaignState {
   endLedger: number;
   initializedAt: string;
   mode: "real_groth16_verifier";
+  notes: string;
+}
+
+export interface ActiveTestnetDeployment {
+  network: "testnet";
+  campaignContractId: string;
+  verifierContractId: string;
+  mockTokenContractId: string;
+  campaignId: string;
+  eligibilityRoot: string;
+  policyHash: string;
+  operator: string;
+  asset: string;
+  budget: string;
+  perRecipientCap: string;
+  startLedger: number;
+  endLedger: number;
+  createdAt: string;
+  verifierInfo:
+    | {
+        mode: "real_groth16" | "dev_verifier";
+        version: string;
+        verifierId: string;
+        circuitId: string;
+        verificationKeyHash: string;
+      }
+    | {
+        mode: "legacy_not_introspectable";
+        notes: string;
+      };
+  recipients: {
+    id: string;
+    displayName: string;
+    eligible: boolean;
+    defaultClaimAmount: number;
+  }[];
   notes: string;
 }
 
@@ -104,6 +146,10 @@ export function requireCleanSourceAccount(): string {
 
   if (/^S[A-Z2-7]{55}$/.test(sourceAccount)) {
     throw new Error("Refusing to use a secret key in STELLAR_SOURCE_ACCOUNT. Use a local Stellar CLI key name.");
+  }
+
+  if (process.env.STELLAR_NETWORK && process.env.STELLAR_NETWORK !== network) {
+    throw new Error(`Refusing to use STELLAR_NETWORK=${process.env.STELLAR_NETWORK}; expected ${network}.`);
   }
 
   process.env.STELLAR_NETWORK = network;
