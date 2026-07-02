@@ -1,3 +1,4 @@
+# Dependencies and build caches
 node_modules
 .tools
 .next
@@ -5,11 +6,14 @@ dist
 coverage
 .turbo
 *.tsbuildinfo
-.env
-.env.local
-.env.*.local
+
+# Rust/Soroban build output
 target
 contracts/**/target
+
+# ZK generated artifacts
+circuits/claim/build
+apps/web/public/zk
 *.wasm
 *.r1cs
 *.zkey
@@ -20,6 +24,17 @@ contracts/**/target
 verification_key.json
 proof.json
 public.json
-circuits/claim/build
+
+# Local secrets and private keys
+.env
+.env.local
+.env.*.local
+.stellar
+.stellar/
+secrets/
+*.key
+*.pem
+
+# OS/editor artifacts
 .DS_Store
 NUL

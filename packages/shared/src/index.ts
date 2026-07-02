@@ -5,7 +5,7 @@ export type FieldElement = string;
 export type ProofMode = "groth16" | "dev_verifier";
 
 export interface DemoRecipient {
-  id: "alice" | "bob" | "mallory";
+  id: "alice" | "bob" | "charlie" | "dora" | "mallory";
   displayName: string;
   eligibilityReason: string;
   eligible: boolean;

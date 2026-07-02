@@ -19,10 +19,12 @@ import {
   StatusDot,
   VerifierStatusBadge
 } from "@/components/ui";
+import { getPublicTestnetStatus, readPublicStellarEnv } from "@/lib/testnet-state";
 
 export default function Home() {
   const tree = buildDemoEligibilityTree();
   const campaign = createDemoCampaignConfig(tree);
+  const testnetStatus = getPublicTestnetStatus(readPublicStellarEnv());
   const architecture = [
     { label: "Operator", detail: "builds eligibility list", icon: ShieldCheck },
     { label: "Eligibility root", detail: "public Merkle commitment", icon: Trees },
@@ -36,6 +38,9 @@ export default function Home() {
       <section className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-stretch">
         <div className="flex min-h-[500px] flex-col justify-between py-4">
           <div className="max-w-3xl">
+            <div className="mb-5 inline-flex rounded-lg border border-[#26313d] bg-[#10161d] px-3 py-2">
+              <StatusDot tone={testnetStatus.tone} label={testnetStatus.label} />
+            </div>
             <h1 className="text-5xl font-semibold leading-tight text-white sm:text-6xl">Lumen</h1>
             <p className="mt-5 text-xl leading-8 text-[#d8e7ec] sm:text-2xl">
               Private aid claims with public accountability on Stellar/Soroban.

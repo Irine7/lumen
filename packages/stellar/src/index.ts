@@ -18,12 +18,73 @@ export interface LumenStellarEnv {
   mockTokenContractId: string;
 }
 
+export interface TestnetCampaignConfig {
+  network: "testnet";
+  contractId: string;
+  campaignId: Hex32;
+  operator: string;
+  asset: string;
+  budget: string;
+  perRecipientCap: string;
+  eligibilityRoot: Hex32;
+  denyRoot: Hex32 | null;
+  policyHash: Hex32;
+  verifierContractId: string;
+  startLedger: number;
+  endLedger: number;
+  isActive: boolean;
+}
+
+export interface TestnetCampaignStats {
+  network: "testnet";
+  contractId: string;
+  totalClaimed: string;
+  claimCount: number;
+  remainingBudget: string;
+  duplicateClaimsBlocked: number;
+  invalidClaimsBlocked: number;
+}
+
+export interface TestnetVerifierStatus {
+  network: "testnet";
+  contractId: string;
+  status: "callable_malformed_rejected";
+  mode: "real_groth16" | "dev_verifier" | "legacy_not_introspectable";
+  version: "claim_v0" | "unknown";
+  verifierId: Hex32 | null;
+  circuitId: Hex32 | null;
+  verificationKeyHash: Hex32 | null;
+  notes: string;
+}
+
+export type StellarReadResult<T> =
+  | {
+      status: "ready";
+      data: T;
+    }
+  | {
+      status: "not_configured";
+      missing: string[];
+      message: string;
+    }
+  | {
+      status: "error";
+      error: string;
+      message: string;
+    };
+
 export interface LumenCampaignSnapshot {
   campaign: CampaignConfig;
   stats: CampaignStats;
   usedNullifiers: Hex32[];
   events: CampaignEvent[];
 }
+
+type StellarSdk = typeof import("@stellar/stellar-sdk");
+type StellarScVal = ReturnType<StellarSdk["nativeToScVal"]>;
+
+const READ_ONLY_SIMULATION_SOURCE =
+  "GDRCC7MJVHXPNTEWV7IT525DPKOBHWOLK2GJB44736OO37IIJVL3WIDD";
 
 export interface SubmitClaimResult {
   ok: boolean;
@@ -50,6 +111,313 @@ export function readLumenStellarEnv(
     verifierContractId: env.NEXT_PUBLIC_VERIFIER_CONTRACT_ID ?? "",
     mockTokenContractId: env.NEXT_PUBLIC_MOCK_TOKEN_CONTRACT_ID ?? ""
   };
+}
+
+function notConfigured<T>(missing: string[]): StellarReadResult<T> {
+  return {
+    status: "not_configured",
+    missing,
+    message: `Missing testnet read configuration: ${missing.join(", ")}`
+  };
+}
+
+function readError<T>(error: unknown): StellarReadResult<T> {
+  return {
+    status: "error",
+    error: error instanceof Error ? error.message : String(error),
+    message: "Testnet read failed"
+  };
+}
+
+function missingBaseReadConfig(config: LumenStellarEnv): string[] {
+  const missing: string[] = [];
+  if (config.network !== "testnet") {
+    missing.push("NEXT_PUBLIC_STELLAR_NETWORK=testnet");
+  }
+  if (!config.rpcUrl) {
+    missing.push("NEXT_PUBLIC_RPC_URL");
+  }
+  if (!config.campaignContractId) {
+    missing.push("NEXT_PUBLIC_CAMPAIGN_CONTRACT_ID");
+  }
+
+  return missing;
+}
+
+function missingVerifierReadConfig(config: LumenStellarEnv): string[] {
+  const missing = missingBaseReadConfig(config);
+  if (!config.verifierContractId) {
+    missing.push("NEXT_PUBLIC_VERIFIER_CONTRACT_ID");
+  }
+
+  return missing;
+}
+
+async function simulateContractCall(
+  config: LumenStellarEnv,
+  contractId: string,
+  method: string,
+  args: StellarScVal[] = []
+): Promise<unknown> {
+  const sdk: StellarSdk = await import("@stellar/stellar-sdk");
+  const server = new sdk.rpc.Server(config.rpcUrl, {
+    allowHttp: config.rpcUrl.startsWith("http://")
+  });
+  const source = new sdk.Account(READ_ONLY_SIMULATION_SOURCE, "0");
+  const contract = new sdk.Contract(contractId);
+  const tx = new sdk.TransactionBuilder(source, {
+    fee: sdk.BASE_FEE,
+    networkPassphrase: sdk.Networks.TESTNET
+  })
+    .addOperation(contract.call(method, ...args))
+    .setTimeout(30)
+    .build();
+  const simulation = await server.simulateTransaction(tx);
+
+  if ("error" in simulation && simulation.error) {
+    throw new Error(simulation.error);
+  }
+  if (!("result" in simulation) || !simulation.result) {
+    throw new Error(`No simulation result for ${method}`);
+  }
+
+  return sdk.scValToNative(simulation.result.retval);
+}
+
+function bytesToHex32(value: unknown, label: string): Hex32 {
+  if (typeof value === "string") {
+    return (value.startsWith("0x") ? value : `0x${value}`) as Hex32;
+  }
+
+  if (value instanceof Uint8Array) {
+    return `0x${[...value].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+  }
+
+  throw new Error(`Expected ${label} to be 32-byte data`);
+}
+
+function valueToString(value: unknown, label: string): string {
+  if (typeof value === "bigint" || typeof value === "number" || typeof value === "string") {
+    return value.toString();
+  }
+
+  throw new Error(`Expected ${label} to be numeric`);
+}
+
+function valueToNumber(value: unknown, label: string): number {
+  const asNumber = Number(value);
+  if (!Number.isFinite(asNumber)) {
+    throw new Error(`Expected ${label} to be numeric`);
+  }
+
+  return asNumber;
+}
+
+function nullableBytesToHex32(value: unknown, label: string): Hex32 | null {
+  return value === null || value === undefined ? null : bytesToHex32(value, label);
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
+  const matches = clean.match(/.{2}/g) ?? [];
+  return Uint8Array.from(matches.map((byte) => Number.parseInt(byte, 16)));
+}
+
+function zeroHex32(): string {
+  return "0".repeat(64);
+}
+
+function safeSymbol(value: unknown): string {
+  return typeof value === "string" ? value : String(value);
+}
+
+function verifierModeFromInfo(value: unknown): "real_groth16" | "dev_verifier" | null {
+  const mode = safeSymbol(value);
+  if (mode === "real_groth16" || mode === "dev_verifier") {
+    return mode;
+  }
+  return null;
+}
+
+async function malformedVerifierArgs(): Promise<StellarScVal[]> {
+  const sdk: StellarSdk = await import("@stellar/stellar-sdk");
+  const zero = zeroHex32();
+  const publicInputs = {
+    amount: 1n,
+    amount_commitment: hexToBytes(zero),
+    campaign_id: hexToBytes(zero),
+    eligibility_root: hexToBytes(zero),
+    max_amount: 1n,
+    nullifier_hash: hexToBytes(zero),
+    policy_hash: hexToBytes(zero),
+    recipient_commitment: hexToBytes(zero)
+  };
+  const publicInputTypes: Record<string, ["symbol", "i128" | "bytes"]> = {
+    amount: ["symbol", "i128"],
+    amount_commitment: ["symbol", "bytes"],
+    campaign_id: ["symbol", "bytes"],
+    eligibility_root: ["symbol", "bytes"],
+    max_amount: ["symbol", "i128"],
+    nullifier_hash: ["symbol", "bytes"],
+    policy_hash: ["symbol", "bytes"],
+    recipient_commitment: ["symbol", "bytes"]
+  };
+
+  return [
+    sdk.nativeToScVal(publicInputs, { type: publicInputTypes }),
+    sdk.nativeToScVal(Uint8Array.from([0]), { type: "bytes" })
+  ];
+}
+
+export async function getCampaignConfig(
+  config: LumenStellarEnv
+): Promise<StellarReadResult<TestnetCampaignConfig>> {
+  const missing = missingBaseReadConfig(config);
+  if (missing.length > 0) {
+    return notConfigured(missing);
+  }
+
+  try {
+    const value = (await simulateContractCall(
+      config,
+      config.campaignContractId,
+      "get_campaign"
+    )) as Record<string, unknown>;
+
+    return {
+      status: "ready",
+      data: {
+        network: "testnet",
+        contractId: config.campaignContractId,
+        campaignId: bytesToHex32(value.campaign_id, "campaign_id"),
+        operator: String(value.operator),
+        asset: String(value.asset),
+        budget: valueToString(value.budget, "budget"),
+        perRecipientCap: valueToString(value.per_recipient_cap, "per_recipient_cap"),
+        eligibilityRoot: bytesToHex32(value.eligibility_root, "eligibility_root"),
+        denyRoot: nullableBytesToHex32(value.deny_root, "deny_root"),
+        policyHash: bytesToHex32(value.policy_hash, "policy_hash"),
+        verifierContractId: String(value.verifier),
+        startLedger: valueToNumber(value.start_ledger, "start_ledger"),
+        endLedger: valueToNumber(value.end_ledger, "end_ledger"),
+        isActive: Boolean(value.is_active)
+      }
+    };
+  } catch (error) {
+    return readError(error);
+  }
+}
+
+async function getTestnetCampaignStats(
+  config: LumenStellarEnv
+): Promise<StellarReadResult<TestnetCampaignStats>> {
+  const missing = missingBaseReadConfig(config);
+  if (missing.length > 0) {
+    return notConfigured(missing);
+  }
+
+  try {
+    const value = (await simulateContractCall(
+      config,
+      config.campaignContractId,
+      "get_stats"
+    )) as Record<string, unknown>;
+
+    return {
+      status: "ready",
+      data: {
+        network: "testnet",
+        contractId: config.campaignContractId,
+        totalClaimed: valueToString(value.total_claimed, "total_claimed"),
+        claimCount: valueToNumber(value.claim_count, "claim_count"),
+        remainingBudget: valueToString(value.remaining_budget, "remaining_budget"),
+        duplicateClaimsBlocked: valueToNumber(
+          value.duplicate_claims_blocked,
+          "duplicate_claims_blocked"
+        ),
+        invalidClaimsBlocked: valueToNumber(
+          value.invalid_claims_blocked,
+          "invalid_claims_blocked"
+        )
+      }
+    };
+  } catch (error) {
+    return readError(error);
+  }
+}
+
+export async function getVerifierStatus(
+  config: LumenStellarEnv
+): Promise<StellarReadResult<TestnetVerifierStatus>> {
+  const missing = missingVerifierReadConfig(config);
+  if (missing.length > 0) {
+    return notConfigured(missing);
+  }
+
+  try {
+    let info:
+      | {
+          mode: "real_groth16" | "dev_verifier";
+          version: "claim_v0" | "unknown";
+          verifierId: Hex32;
+          circuitId: Hex32;
+          verificationKeyHash: Hex32;
+        }
+      | null = null;
+
+    try {
+      const value = (await simulateContractCall(
+        config,
+        config.verifierContractId,
+        "verifier_info"
+      )) as Record<string, unknown>;
+      const mode = verifierModeFromInfo(value.mode);
+      if (mode) {
+        info = {
+          mode,
+          version: safeSymbol(value.version) === "claim_v0" ? "claim_v0" : "unknown",
+          verifierId: bytesToHex32(value.verifier_id, "verifier_id"),
+          circuitId: bytesToHex32(value.circuit_id, "circuit_id"),
+          verificationKeyHash: bytesToHex32(
+            value.verification_key_hash,
+            "verification_key_hash"
+          )
+        };
+      }
+    } catch {
+      info = null;
+    }
+
+    const result = await simulateContractCall(
+      config,
+      config.verifierContractId,
+      "verify_claim",
+      await malformedVerifierArgs()
+    );
+
+    if (result !== false) {
+      throw new Error("Verifier unexpectedly accepted a malformed proof");
+    }
+
+    return {
+      status: "ready",
+      data: {
+        network: "testnet",
+        contractId: config.verifierContractId,
+        status: "callable_malformed_rejected",
+        mode: info?.mode ?? "legacy_not_introspectable",
+        version: info?.version ?? "unknown",
+        verifierId: info?.verifierId ?? null,
+        circuitId: info?.circuitId ?? null,
+        verificationKeyHash: info?.verificationKeyHash ?? null,
+        notes: info
+          ? `Verifier mode: ${info.mode}; verifier_info returned ${info.version}. Malformed proof simulation returned false.`
+          : "Verifier mode: legacy verifier, mode not introspectable. Malformed proof simulation returned false."
+      }
+    };
+  } catch (error) {
+    return readError(error);
+  }
 }
 
 function now(): string {
@@ -289,10 +657,18 @@ export async function submitClaim(
   return client.submitClaim(publicInputs, proof);
 }
 
+export function getCampaignStats(client: LocalLumenSorobanClient): Promise<CampaignStats>;
+export function getCampaignStats(
+  config: LumenStellarEnv
+): Promise<StellarReadResult<TestnetCampaignStats>>;
 export async function getCampaignStats(
-  client: LocalLumenSorobanClient
-): Promise<CampaignStats> {
-  return client.getCampaignStats();
+  input: LocalLumenSorobanClient | LumenStellarEnv
+): Promise<CampaignStats | StellarReadResult<TestnetCampaignStats>> {
+  if (input instanceof LocalLumenSorobanClient) {
+    return input.getCampaignStats();
+  }
+
+  return getTestnetCampaignStats(input);
 }
 
 export async function isNullifierUsed(

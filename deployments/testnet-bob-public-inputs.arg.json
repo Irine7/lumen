@@ -1,0 +1,10 @@
+{
+  "amount": "175",
+  "amount_commitment": "2e1c1a090fbb08eebf4be03a0fcb13220aed3a8ac2f3dce50b71d95a79dcf46e",
+  "campaign_id": "0026b8888700a5d67d4a5374656c6c61722d6169642d7261696c732d30303101",
+  "eligibility_root": "1533dddeb2e62943d31b07f72e99112fca3a7f0b21c5804ea27113c8e60d737a",
+  "max_amount": "250",
+  "nullifier_hash": "04f395c3991502f31accfd784150fe01b25bf3f79192547eb051c982a1e66aca",
+  "policy_hash": "1f0f1c8d9e2215a08b69345882c8850b778b85f0346f02c7c2a610f51d41aa21",
+  "recipient_commitment": "16376b0cd2e5f4c9e0e75c2acdcb6a61efddb13fe4d786512ba2ea14758196a5"
+}
