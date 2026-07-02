@@ -56,7 +56,16 @@ claim.circom
   -> snarkjs local verification
 ```
 
-The Soroban verifier contract performs BN254 Groth16 verification by default for the current `claim_v0` development verification key. The browser demo still uses an explicit `dev_verifier` envelope through the local Soroban-shaped simulator; it is labeled as demo-only in the UI and docs.
+The Soroban verifier contract performs BN254 Groth16 verification by default for the current `claim_v0` development verification key. The primary recipient UI now has a **Real Testnet Claim** mode that proves in the browser, verifies locally, and submits only proof/public inputs to a testnet relayer. The **Local Demo** mode still uses an explicit `dev_verifier` envelope through the local Soroban-shaped simulator and is labeled demo-only.
+
+Current product status:
+
+- Real now: browser Groth16 proof generation in a Web Worker.
+- Real now: browser local proof verification with the public verification key.
+- Real now: browser-submitted Stellar testnet claim through the local testnet relayer.
+- Real now: Soroban campaign/verifier accepts or rejects the claim on testnet.
+- Real now: donor dashboard reads the active testnet campaign and refreshes after browser claims.
+- Disclosure-only: deterministic development trusted setup, mock token, local demo simulator, `dev_verifier` feature path, missing Freighter mode, no production audit, and no mainnet support.
 
 ## What The Proof Proves
 
@@ -233,6 +242,13 @@ pnpm zk:prove:demo
 pnpm zk:verify:local
 ```
 
+Prepare public browser proving artifacts:
+
+```bash
+pnpm web:zk:prepare
+pnpm web:zk:clean
+```
+
 Run the deterministic CLI demo:
 
 ```bash
@@ -256,20 +272,25 @@ pnpm stellar:deploy:testnet
 pnpm stellar:init-campaign:testnet
 pnpm stellar:claim:alice:testnet
 pnpm stellar:claim:alice-duplicate:testnet
+pnpm stellar:fresh-campaign:testnet
+pnpm stellar:active:testnet
+pnpm stellar:smoke:testnet:full
+pnpm web:e2e:testnet
+pnpm privacy:audit
 ```
 
 ## Demo Scenarios
 
 1. Landing page: explain privacy problem, aggregate accountability, Stellar/Soroban architecture.
-2. Recipient page: select Alice, generate proof, show local demo verification, submit claim, see accepted result.
-3. Recipient page: try Alice again, see duplicate nullifier blocked.
-4. Recipient page: select Mallory, generate proof, see rejection.
-5. Donor page: show total budget, distributed amount, remaining amount, successful claims, duplicate claims blocked, invalid claims blocked, privacy status, verifier status.
-6. Debug page: inspect synthetic private witness with the warning: "Demo debug mode. Do not use with real recipient data."
+2. Recipient page: Real Testnet Claim mode generates a real browser Groth16 proof, verifies locally, and submits proof/public inputs to Stellar testnet.
+3. Recipient page: try the same real testnet claim again and see duplicate nullifier rejection.
+4. Recipient page: select Mallory and see local witness/proof rejection before submission.
+5. Donor page: show active testnet contract IDs, budget, claimed amount, remaining amount, duplicate/invalid counters, verifier mode, and last browser tx hash.
+6. Debug page: inspect synthetic private witness values only after the explicit warning/toggle.
 
 ## Testnet Deployment
 
-Current public Stellar testnet IDs are recorded in `deployments/` and documented in `docs/TESTNET_DEPLOYMENT.md`.
+Current public Stellar testnet IDs are recorded in `deployments/`. The active product flow reads `deployments/active-testnet.json`.
 
 ```txt
 verifier   = CCHDSG4NLE4IWNGXOR46OYQRAW7KA4VQQB7NF4BTRH3D4HJIRBDLRR7D
@@ -279,10 +300,10 @@ mock token = CDCH6ECKA3EHYT7KO3ZXE275W2YCO7PAHRX4G2KGXNIZLFID5HFAFFC7
 
 Status:
 
-- Contracts are deployed and initialized on testnet.
-- Alice testnet claim smoke test is accepted.
-- Alice duplicate smoke test is rejected with `DuplicateNullifier #10`.
-- Browser-submitted testnet claims are not wired yet; the browser demo uses the local simulator/dev envelope.
+- Fresh active testnet campaigns can be created with `pnpm stellar:fresh-campaign:testnet`.
+- Active campaign and verifier callability are checked with `pnpm stellar:active:testnet`.
+- `pnpm stellar:smoke:testnet:full` performs a real positive Charlie claim and duplicate rejection on testnet.
+- `pnpm web:e2e:testnet` performs a real browser-generated Dora proof, browser local verification, relayed testnet claim, duplicate rejection, and Mallory rejection.
 
 ## Verifier Status
 
@@ -290,7 +311,7 @@ Use these exact labels when presenting the project:
 
 - **Real local ZK proof**: Circom/snarkjs Groth16 proof generation and local verification.
 - **Real on-chain verification**: Soroban BN254 Groth16 verifier in local contract tests and deployed testnet smoke path.
-- **Dev-only on-chain verifier**: explicit dev verifier envelope/feature used by the browser simulator and dev tests. This is not production ZK.
+- **Dev-only on-chain verifier**: explicit dev verifier envelope/feature used by Local Demo mode and dev tests. This is not production ZK.
 
 See `docs/VERIFIER_STATUS.md` for the full truth table.
 
@@ -298,20 +319,21 @@ See `docs/VERIFIER_STATUS.md` for the full truth table.
 
 - The project is not audited.
 - The current trusted setup artifacts are deterministic development artifacts, not a production ceremony.
-- The browser demo uses a local simulator/dev verifier envelope.
-- Browser-submitted testnet claims are not wired.
+- Local Demo mode uses a local simulator/dev verifier envelope.
+- Freighter wallet submission is not implemented; browser testnet submission uses a local testnet relayer.
 - Amounts are public in the MVP.
 - Demo recipients are deterministic fixtures.
 - Deny-list non-membership is not enforced yet.
 - Network metadata, wallet metadata, and off-chain operational privacy are not solved.
+- Mainnet is not supported.
 
 See `docs/LIMITATIONS.md`.
 
 ## Future Work
 
 - Production trusted setup and verifier key pipeline.
-- Browser worker proving with artifact caching.
-- Direct browser testnet submission.
+- Freighter wallet mode.
+- Production relayer hardening and deployment.
 - Confidential amounts.
 - Auditor view keys and reporting exports.
 - NGO/KYC provider integrations.

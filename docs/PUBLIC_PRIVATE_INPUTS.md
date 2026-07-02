@@ -1,6 +1,6 @@
 # Public And Private Inputs
 
-This document describes the claim proof inputs used by the real local Groth16 proof path.
+This document describes the claim proof inputs used by the real local and browser Groth16 proof paths.
 
 Run:
 
@@ -36,7 +36,7 @@ alice_nullifier  = 0x304839a43cd2b03a7c030591abb845e56e4fa662d30f2540656df7b8258
 
 ## Private Inputs
 
-These values are never submitted publicly. In the demo they are written only to debug artifacts so the proof path is reproducible.
+These values are never submitted to any API route or contract. CLI scripts may write them only to ignored local/debug artifacts or temporary directories so the proof path is reproducible. Browser Real Testnet Claim mode keeps them inside the browser worker.
 
 | Input | Type | Derivation / meaning | Demo artifact |
 | --- | --- | --- | --- |
@@ -148,6 +148,43 @@ Full check output is written to:
 circuits/claim/build/verification-report.json
 ```
 
+## Browser Public ZK Artifacts
+
+`pnpm web:zk:prepare` copies only public proving artifacts to:
+
+```txt
+apps/web/public/zk/claim.wasm
+apps/web/public/zk/claim_final.zkey
+apps/web/public/zk/verification_key.json
+apps/web/public/zk/zk-manifest.json
+```
+
+It does not copy `.wtns` files, witness JSON, private input JSON, recipient secrets, or Merkle path fixture files. `pnpm web:zk:clean` removes only those browser public ZK files. The directory is ignored because these are generated artifacts.
+
+## Browser Testnet Relayer Payload
+
+`/api/testnet/claim` accepts only:
+
+```json
+{
+  "proofEncodingForSoroban": "...",
+  "publicInputs": {
+    "campaignId": "0x...",
+    "eligibilityRoot": "0x...",
+    "policyHash": "0x...",
+    "nullifierHash": "0x...",
+    "amountCommitment": "0x...",
+    "recipientCommitment": "0x...",
+    "amount": 100,
+    "maxAmount": 250
+  },
+  "campaignContractId": "C...",
+  "campaignId": "0x..."
+}
+```
+
+The route rejects private witness field names such as `recipient_secret`, `identity_hash`, `leaf_salt`, `amount_salt`, Merkle paths, witness data, or `privateInputs`.
+
 ## Soroban Verifier Inputs
 
 The default Soroban verifier contract verifies the same `claim_v0` Groth16 proof against the embedded development verification key. Contract proof bytes are encoded as:
@@ -160,7 +197,7 @@ The campaign contract passes the `ClaimPublicInputs` struct into the verifier. T
 
 ## Dev-Only Proof Envelope
 
-The TypeScript package `@lumen-aid/prover` still supports a deterministic `dev_verifier` envelope for the browser demo and local Soroban-shaped simulator. It is not Groth16. Callers must explicitly pass:
+The TypeScript package `@lumen-aid/prover` still supports a deterministic `dev_verifier` envelope for Local Demo mode and the local Soroban-shaped simulator. It is not Groth16. Callers must explicitly pass:
 
 ```ts
 mode: "dev_verifier"

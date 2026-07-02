@@ -9,8 +9,9 @@ Lumen is a hackathon prototype. It demonstrates the core privacy/accountability 
 - Production verification key generation and lifecycle management are future work.
 - The circuit has not been externally audited.
 - The Soroban verifier contract has not been externally audited.
-- The browser demo uses a `dev_verifier` envelope through a local simulator; it is not browser-submitted production ZK.
-- Browser-submitted testnet claims are not wired yet.
+- Real Testnet Claim mode uses browser Groth16 proving and local verification, then submits proof/public inputs through a local testnet relayer.
+- Local Demo mode still uses a `dev_verifier` envelope through a local simulator.
+- Browser-submitted testnet claims are testnet-only and relayer-based; Freighter mode and production relayer hardening are not implemented.
 
 ## Privacy
 
@@ -40,8 +41,8 @@ Lumen is a hackathon prototype. It demonstrates the core privacy/accountability 
 
 - The frontend is optimized for hackathon demo clarity, not a production recipient app.
 - The frontend local flow uses a simulator-backed campaign client.
-- Testnet contract IDs can be displayed/documented, but browser claim submission to those contracts is future work.
-- Browser proving is not moved into a production worker with artifact caching yet.
+- Testnet contract IDs are read from `deployments/active-testnet.json`.
+- Browser proving runs in a worker, but production artifact caching/hardening is future work.
 
 ## Security and compliance
 
@@ -55,13 +56,13 @@ Lumen is a hackathon prototype. It demonstrates the core privacy/accountability 
 Safe wording:
 
 ```txt
-Lumen demonstrates private aid eligibility proofs with real local Groth16 proof generation/verification, Soroban campaign contracts, and a deployed testnet Groth16 verifier smoke path. The browser demo uses a dev-only simulator envelope and is not production ZK.
+Lumen demonstrates private aid eligibility proofs with real local and browser Groth16 proof generation/verification, Soroban campaign contracts, and browser-submitted Stellar testnet claims through a local testnet relayer. The trusted setup is deterministic development-only and the testnet asset is a mock token.
 ```
 
 Do not use this wording:
 
 ```txt
-The browser app submits production ZK claims on-chain.
+The browser app is production-ready for mainnet aid claims.
 ```
 
-That is not true yet.
+That is not true.
