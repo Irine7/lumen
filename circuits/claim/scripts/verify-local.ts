@@ -101,6 +101,76 @@ async function main(): Promise<void> {
     await invalidWitnessCase("Mallory invalid claim fails", malloryInputPath, malloryWitnessPath)
   );
 
+  const eveWithWrongCompliance = createDemoCircuitCase({
+    recipientId: "eve",
+    complianceMerkleProofOverride: createDemoCircuitCase({ recipientId: "alice" })
+      .complianceMerkleProof
+  });
+  assertCircuitInputs(eveWithWrongCompliance);
+  const eveInputPath = artifactPaths.aliceInput.replace(
+    "alice-input.json",
+    "eve-non-compliant-input.invalid.json"
+  );
+  const eveWitnessPath = artifactPaths.aliceWitness.replace(
+    "alice-witness.wtns",
+    "eve-non-compliant-witness.invalid.wtns"
+  );
+  await writeJson(eveInputPath, eveWithWrongCompliance.circuitInputs);
+  results.push(
+    await invalidWitnessCase("Eligible but not compliant recipient fails", eveInputPath, eveWitnessPath)
+  );
+
+  const malloryCompliantRecipients = mallory.tree.eligibleRecipients
+    .concat(mallory.recipient)
+    .map((recipient) =>
+      recipient.id === "mallory" ? { ...recipient, eligible: false, compliant: true } : recipient
+    );
+  const compliantMallory = createDemoCircuitCase({
+    recipientId: "mallory",
+    recipients: malloryCompliantRecipients,
+    merkleProofOverride: createDemoCircuitCase({ recipientId: "alice" }).merkleProof
+  });
+  assertCircuitInputs(compliantMallory);
+  const compliantMalloryInputPath = artifactPaths.aliceInput.replace(
+    "alice-input.json",
+    "compliant-mallory-input.invalid.json"
+  );
+  const compliantMalloryWitnessPath = artifactPaths.aliceWitness.replace(
+    "alice-witness.wtns",
+    "compliant-mallory-witness.invalid.wtns"
+  );
+  await writeJson(compliantMalloryInputPath, compliantMallory.circuitInputs);
+  results.push(
+    await invalidWitnessCase(
+      "Compliant but not eligible recipient fails",
+      compliantMalloryInputPath,
+      compliantMalloryWitnessPath
+    )
+  );
+
+  const bobCompliancePath = createDemoCircuitCase({ recipientId: "bob" }).complianceMerkleProof;
+  const tamperedCompliancePath = createDemoCircuitCase({
+    recipientId: "alice",
+    complianceMerkleProofOverride: bobCompliancePath
+  });
+  assertCircuitInputs(tamperedCompliancePath);
+  const tamperedComplianceInputPath = artifactPaths.aliceInput.replace(
+    "alice-input.json",
+    "tampered-compliance-path-input.invalid.json"
+  );
+  const tamperedComplianceWitnessPath = artifactPaths.aliceWitness.replace(
+    "alice-witness.wtns",
+    "tampered-compliance-path-witness.invalid.wtns"
+  );
+  await writeJson(tamperedComplianceInputPath, tamperedCompliancePath.circuitInputs);
+  results.push(
+    await invalidWitnessCase(
+      "Tampered compliance path fails",
+      tamperedComplianceInputPath,
+      tamperedComplianceWitnessPath
+    )
+  );
+
   const overCap = createDemoCircuitCase({
     recipientId: "alice",
     amount: mallory.campaign.perRecipientCap + 1
@@ -128,7 +198,7 @@ async function main(): Promise<void> {
     "alice-public.json",
     "tampered-public.invalid.json"
   );
-  await writeJson(modifiedPublicPath, tamperPublicSignals(publicSignals, 3));
+  await writeJson(modifiedPublicPath, tamperPublicSignals(publicSignals, 4));
   const modifiedPublic = await verifyProof(modifiedPublicPath, artifactPaths.aliceProof, {
     suppressOutput: true
   });
@@ -156,6 +226,22 @@ async function main(): Promise<void> {
     detail: "eligibility_root public signal changed"
   });
 
+  const wrongComplianceRootPath = artifactPaths.alicePublic.replace(
+    "alice-public.json",
+    "wrong-compliance-root-public.invalid.json"
+  );
+  await writeJson(wrongComplianceRootPath, tamperPublicSignals(publicSignals, 2));
+  const wrongComplianceRoot = await verifyProof(wrongComplianceRootPath, artifactPaths.aliceProof, {
+    suppressOutput: true
+  });
+  results.push({
+    name: "Tampered compliance root fails",
+    expected: false,
+    actual: wrongComplianceRoot,
+    ok: wrongComplianceRoot === false,
+    detail: "compliance_root public signal changed"
+  });
+
   const wrongCampaignPath = artifactPaths.alicePublic.replace(
     "alice-public.json",
     "wrong-campaign-public.invalid.json"
@@ -176,12 +262,12 @@ async function main(): Promise<void> {
     "alice-public.json",
     "wrong-policy-public.invalid.json"
   );
-  await writeJson(wrongPolicyPath, tamperPublicSignals(publicSignals, 2));
+  await writeJson(wrongPolicyPath, tamperPublicSignals(publicSignals, 3));
   const wrongPolicy = await verifyProof(wrongPolicyPath, artifactPaths.aliceProof, {
     suppressOutput: true
   });
   results.push({
-    name: "Wrong policy_hash fails",
+    name: "Wrong compliance policy/provider fails",
     expected: false,
     actual: wrongPolicy,
     ok: wrongPolicy === false,

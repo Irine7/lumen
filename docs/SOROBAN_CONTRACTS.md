@@ -18,6 +18,7 @@ The campaign contract stores:
 - `budget`
 - `per_recipient_cap`
 - `eligibility_root`
+- `compliance_root`
 - `deny_root`
 - `policy_hash`
 - `verifier`
@@ -35,24 +36,28 @@ It also stores aggregate stats:
 
 ## Claim Flow
 
-`claim(public_inputs, proof)` executes in this order:
+`claim(public_inputs, proof, payout_recipient)` executes in this order:
 
 1. Load campaign config and stats.
 2. Reject if campaign is inactive.
 3. Reject if the current ledger is outside the campaign window.
-4. Reject if `public_inputs.eligibility_root` does not equal the stored root.
-5. Reject if `public_inputs.policy_hash` does not equal the stored policy hash.
-6. Reject if `public_inputs.max_amount` does not equal the stored cap.
-7. Reject if `public_inputs.amount` is over `per_recipient_cap`.
-8. Reject if remaining budget is insufficient.
-9. Reject if `public_inputs.nullifier_hash` is already stored.
-10. Call the verifier contract via `verify_claim(public_inputs, proof)`.
-11. Reject if the verifier returns `false`.
-12. Store the nullifier.
-13. Update `total_claimed`, `claim_count`, and `remaining_budget`.
-14. Emit a claim event.
+4. Reject if the payout recipient hash does not match `public_inputs.payout_account_hash`.
+5. Reject if `public_inputs.campaign_id` does not equal the stored campaign ID.
+6. Reject if `public_inputs.eligibility_root` does not equal the stored eligibility root.
+7. Reject if `public_inputs.compliance_root` does not equal the stored compliance root.
+8. Reject if `public_inputs.policy_hash` does not equal the stored policy hash.
+9. Reject if `public_inputs.max_amount` does not equal the stored cap.
+10. Reject if `public_inputs.amount` is over `per_recipient_cap`.
+11. Reject if remaining budget or escrow balance is insufficient.
+12. Reject if `public_inputs.nullifier_hash` is already stored.
+13. Call the verifier contract via `verify_claim(public_inputs, proof)`.
+14. Reject if the verifier returns `false`.
+15. Transfer escrowed asset value to the payout recipient.
+16. Store the nullifier.
+17. Update `total_claimed`, `claim_count`, and `remaining_budget`.
+18. Emit a claim event.
 
-The nullifier is written only after verifier success. Failed verifier calls do not mark a nullifier as used and do not increment `total_claimed` or `claim_count`.
+The nullifier is written and the asset is transferred only after verifier success. Failed verifier calls do not mark a nullifier as used and do not increment `total_claimed` or `claim_count`.
 
 ## Verifier Interface
 
@@ -85,12 +90,14 @@ The verifier maps `ClaimPublicInputs` into this public signal order:
 ```txt
 campaign_id
 eligibility_root
+compliance_root
 policy_hash
 nullifier_hash
 amount
 max_amount
 amount_commitment
 recipient_commitment
+payout_account_hash
 ```
 
 It rejects malformed proof length, out-of-field proof coordinates, invalid G1 points, out-of-field public inputs, negative amounts, failed pairing checks, and proof/public-input mismatches.
@@ -128,7 +135,15 @@ Current campaign tests cover:
 - valid claim succeeds with the real Alice Groth16 proof,
 - duplicate nullifier claim fails,
 - wrong eligibility root fails,
+- wrong compliance root fails,
 - wrong policy hash fails,
 - amount over cap fails,
 - invalid verifier result fails without storing nullifier,
+- swapped/tampered payout recipient fails without transfer,
 - claim after close fails.
+
+## Disclosures
+
+- The default verifier uses a deterministic development verification key.
+- The dev verifier feature is not production ZK.
+- Event publishing still uses the older Soroban event API in places and emits deprecation warnings during tests/builds.

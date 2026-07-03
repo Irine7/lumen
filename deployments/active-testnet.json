@@ -1,56 +1,91 @@
 {
   "network": "testnet",
-  "campaignContractId": "CAY354EH72E5DDZDBESTBVWZGQBUWWWFT2VQPSPWSX6VM6VHVGDZNVBV",
-  "verifierContractId": "CAGAZHB5CH3OMGK4LKP2SU2I23B4CGMFVNN4DPOHP2C5EOLETS74KIEE",
-  "mockTokenContractId": "CDCH6ECKA3EHYT7KO3ZXE275W2YCO7PAHRX4G2KGXNIZLFID5HFAFFC7",
-  "campaignId": "0x00db21f02b2f6b410de2bb6ae97cbcf5c18bd512f2b614f9e4d78968d4e3170c",
-  "eligibilityRoot": "0x0f19873d9631b4d11143909ed70a9d4aa5592df67c00195b77d34fc9473dfa0e",
+  "assetMode": "aidusd_sac",
+  "assetCode": "AIDUSD",
+  "assetIssuer": "GDOY2OM6324SAIHXFGTNHYJMKMA25RTTVW2OGIDXO7DMRNVLKPBYB5ZM",
+  "assetContractId": "CBRLWLJH3X2JPIB5UEUXHXDE6KKEZ3MCCVAT6STRAKP2SM52VR5DQTLQ",
+  "campaignContractId": "CCS7WTPLZI36VSQU2T3EKJRNJKGBYMRKNAVAFMSTPL2CJWCMNG2HJSZH",
+  "verifierContractId": "CDK6HSLEZRVIHLLQSEH6LQGXBHYNPL7VXO3W4QN4WVB4C4R5A466SYQZ",
+  "campaignId": "0x00405cc1adafb8ac4ea9b6a8f390d2a2f9565304765480dd4da3c3ff33bce37c",
+  "eligibilityRoot": "0x2b070984377730cd19cb263f65a7ace043bd63cb3e45fa474017e9b52b08fd7e",
+  "complianceRoot": "0x0a2138537cf03c3f72667f1a3436b6599b77363f681e4e44df5cb7f11fca665e",
   "policyHash": "0x1f0f1c8d9e2215a08b69345882c8850b778b85f0346f02c7c2a610f51d41aa21",
   "operator": "GA4SHBKMWY33KHX5C3QNX6DTRRVARVMPBANAY7HLWMHWI6ONW6VN2WK7",
-  "asset": "CDCH6ECKA3EHYT7KO3ZXE275W2YCO7PAHRX4G2KGXNIZLFID5HFAFFC7",
+  "asset": "CBRLWLJH3X2JPIB5UEUXHXDE6KKEZ3MCCVAT6STRAKP2SM52VR5DQTLQ",
   "budget": "1000",
+  "escrowFunded": "1000",
   "perRecipientCap": "250",
   "startLedger": 1,
   "endLedger": 4294967295,
-  "createdAt": "2026-07-02T11:22:44.099Z",
+  "createdAt": "2026-07-03T10:32:58.330Z",
   "verifierInfo": {
     "mode": "real_groth16",
     "version": "claim_v0",
-    "verifierId": "a94ed2527abcae4ae978960c7f8214207c91effc5d26e6c361e1c90356860c32",
-    "circuitId": "08603cc41ac9b990fc5ff0b8e03673b9dab14c54202ddef93e708ef9a3f58fbc",
-    "verificationKeyHash": "c0ba747b09aa4bad0c4e10e981ff9cd233f6f7ff680793d2e24bf685f11d843f"
+    "verifierId": "0xa94ed2527abcae4ae978960c7f8214207c91effc5d26e6c361e1c90356860c32",
+    "circuitId": "0x08603cc41ac9b990fc5ff0b8e03673b9dab14c54202ddef93e708ef9a3f58fbc",
+    "verificationKeyHash": "0xf3be0265175696a6ecc1530ad5789f1ac0e0e899dee49ff066a049545db64e92"
   },
   "recipients": [
     {
       "id": "alice",
+      "name": "Alice",
       "displayName": "Alice",
       "eligible": true,
-      "defaultClaimAmount": 125
+      "compliant": true,
+      "defaultClaimAmount": 125,
+      "payoutAddress": "GC2Z4BA3FPXAQDTG4PJQ6BYR5XSY3JS23CFBXMSYECA6OQJLXTPNUXFD",
+      "payoutAccountHash": "0x00bd1e36efddd0f63fae516694afb5e18bd3f09a00063229997bd53b2f6bf084"
     },
     {
       "id": "bob",
+      "name": "Bob",
       "displayName": "Bob",
       "eligible": true,
-      "defaultClaimAmount": 175
+      "compliant": true,
+      "defaultClaimAmount": 175,
+      "payoutAddress": "GDN2A7FVWUW4CZ3TUJTK2DQVLMTZFB2NI5KV75VUVLZX2LLKMOXK24AO",
+      "payoutAccountHash": "0x00cdce66afc2631965bd1fdcca6697584ab115edd52b838066b93a595c54be31"
     },
     {
       "id": "charlie",
+      "name": "Charlie",
       "displayName": "Charlie",
       "eligible": true,
-      "defaultClaimAmount": 150
+      "compliant": true,
+      "defaultClaimAmount": 150,
+      "payoutAddress": "GCI5GKMAECEYDH4BTJZOXYBRUURU4SNW4WJK3RRY6SEY46IXQPKNGLQ6",
+      "payoutAccountHash": "0x00625ad95f6d2d661c5214c524893ec651ae4a60670ecd2f4caf76be935e130f"
     },
     {
       "id": "dora",
+      "name": "Dora",
       "displayName": "Dora",
       "eligible": true,
-      "defaultClaimAmount": 100
+      "compliant": true,
+      "defaultClaimAmount": 100,
+      "payoutAddress": "GDGXA7EFZNYMFN5CKM57T3FJ3662CXCRTU4LPW67HBCTCJZIN6CRMSR2",
+      "payoutAccountHash": "0x00ea7dc50ce4c4563fb4a42ba0fc901fec12d313e6814f5957a47dd2328b78aa"
+    },
+    {
+      "id": "eve",
+      "name": "Eve",
+      "displayName": "Eve",
+      "eligible": true,
+      "compliant": false,
+      "defaultClaimAmount": 125,
+      "payoutAddress": "GDWFRK4CMI2KSIM7TZYA7JULDJJ74VP3TOM5ZBYMZSLAREOYQERYQ2UK",
+      "payoutAccountHash": "0x006b10eb0bac5399355d02da7aeca99ad0b265abf8c3eecb635331662ff2023b"
     },
     {
       "id": "mallory",
+      "name": "Mallory",
       "displayName": "Mallory",
       "eligible": false,
-      "defaultClaimAmount": 125
+      "compliant": false,
+      "defaultClaimAmount": 125,
+      "payoutAddress": "GDJHKF7OMYXIME7CCQTSLE5FV4HTW7HNCSYRKK3ZM7BCJMCEUL5LYTSS",
+      "payoutAccountHash": "0x00403f8419fdce613afab6498351fcf05ff4ec80aba52e12b1d932b08d91b455"
     }
   ],
-  "notes": "Public active Stellar testnet deployment. Recipient secrets, witness data, Merkle paths, and private inputs are intentionally not written here."
+  "notes": "Public active Stellar testnet AIDUSD payout deployment. Recipient secrets, witness data, Merkle paths, and private inputs are intentionally not written here."
 }

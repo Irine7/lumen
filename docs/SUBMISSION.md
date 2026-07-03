@@ -1,4 +1,6 @@
-# DoraHacks Submission Content
+# Historical Draft: DoraHacks Submission Content
+
+This is an older submission draft and is not final hackathon submission copy. Use `README.md`, `docs/VERIFIER_STATUS.md`, and `reports/latest/` for current validated product state.
 
 ## Project title
 

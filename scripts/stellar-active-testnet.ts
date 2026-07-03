@@ -14,6 +14,7 @@ interface CampaignConfig {
   asset: string;
   budget: string;
   campaign_id: string;
+  compliance_root: string;
   eligibility_root: string;
   is_active: boolean;
   operator: string;
@@ -74,9 +75,11 @@ async function verifierRejectsMalformed(args: {
           amount: "1",
           amount_commitment: zeroHex32(),
           campaign_id: zeroHex32(),
+          compliance_root: zeroHex32(),
           eligibility_root: zeroHex32(),
           max_amount: "1",
           nullifier_hash: zeroHex32(),
+          payout_account_hash: zeroHex32(),
           policy_hash: zeroHex32(),
           recipient_commitment: zeroHex32()
         },
@@ -109,6 +112,10 @@ async function main(): Promise<void> {
   if (active.network !== "testnet") {
     throw new Error(`Expected testnet active deployment, found ${active.network}`);
   }
+  const activeAssetContractId = active.assetContractId ?? active.mockTokenContractId;
+  if (!activeAssetContractId) {
+    throw new Error("Active deployment is missing assetContractId/mockTokenContractId");
+  }
 
   const configResult = invokeContract({
     contractId: active.campaignContractId,
@@ -131,10 +138,11 @@ async function main(): Promise<void> {
   console.log("[ok] campaign stats callable: get_stats");
 
   expectEqual(config.campaign_id, strip0x(active.campaignId), "active campaign ID");
+  expectEqual(config.compliance_root, strip0x(active.complianceRoot), "active compliance root");
   expectEqual(config.eligibility_root, strip0x(active.eligibilityRoot), "active eligibility root");
   expectEqual(config.policy_hash, strip0x(active.policyHash), "active policy hash");
   expectEqual(config.verifier, active.verifierContractId, "active verifier contract ID");
-  expectEqual(config.asset, active.mockTokenContractId, "active mock token contract ID");
+  expectEqual(config.asset, activeAssetContractId, "active asset contract ID");
   expectEqual(config.budget, active.budget, "active budget");
   expectEqual(config.per_recipient_cap, active.perRecipientCap, "active per-recipient cap");
   expectEqual(config.is_active, true, "active campaign active");
@@ -188,4 +196,3 @@ main().catch((error) => {
   console.error(error instanceof Error ? error.message : error);
   process.exit(1);
 });
-

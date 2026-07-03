@@ -160,6 +160,27 @@ describe("lumen-aid dev prover", () => {
     );
   });
 
+  it("rejects an eligible recipient without compliance clearance", async () => {
+    const tree = buildDemoEligibilityTree();
+    const campaign = createDemoCampaignConfig(tree);
+    const eve = demoRecipients.find((recipient) => recipient.id === "eve")!;
+    const result = await generateClaimProof({
+      mode: "dev_verifier",
+      campaign,
+      tree,
+      recipient: eve,
+      amount: eve.defaultClaimAmount
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain(
+      "Recipient is not included in the compliance clearance Merkle tree"
+    );
+    await expect(verifyClaimProofLocally(result.proof, result.publicInputs)).resolves.toBe(
+      false
+    );
+  });
+
   it("derives Alice nullifier from recipient secret and campaign ID", async () => {
     const tree = buildDemoEligibilityTree();
     const campaign = createDemoCampaignConfig(tree);

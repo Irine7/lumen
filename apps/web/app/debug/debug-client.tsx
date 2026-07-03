@@ -16,7 +16,7 @@ import {
 import { useLumenDemo } from "@/lib/demo-runtime";
 
 export function DebugClient() {
-  const { campaign, recipients, tree, generateProof } = useLumenDemo();
+  const { campaign, recipients, tree, complianceTree, generateProof } = useLumenDemo();
   const [selectedId, setSelectedId] = useState<DemoRecipient["id"]>("alice");
   const [amount, setAmount] = useState(125);
   const [proofResult, setProofResult] = useState<ClaimProofResult | null>(null);
@@ -102,7 +102,9 @@ export function DebugClient() {
         <Panel>
           <PanelHeader title="Proof markers" />
           <dl className="p-5">
-            <KeyValue label="Merkle root" value={campaign.eligibilityRoot} />
+            <KeyValue label="Eligibility root" value={campaign.eligibilityRoot} />
+            <KeyValue label="Compliance root" value={campaign.complianceRoot} />
+            <KeyValue label="Compliance status" value={selected.complianceStatus} />
             <KeyValue label="Nullifier" value={proofResult?.publicInputs.nullifierHash ?? "generate first"} />
             <KeyValue label="Public inputs hash" value={proofResult?.proof.publicInputsHash ?? "generate first"} />
             <KeyValue label="Proof mode" value={proofResult?.mode ?? "dev_verifier"} />
@@ -117,7 +119,14 @@ export function DebugClient() {
 
         <Panel>
           <PanelHeader title="Merkle tree" />
-          <CodeBlock value={{ root: tree.root, layers: tree.layers }} />
+          <CodeBlock
+            value={{
+              eligibilityRoot: tree.root,
+              eligibilityLayers: tree.layers,
+              complianceRoot: complianceTree.root,
+              complianceLayers: complianceTree.layers
+            }}
+          />
         </Panel>
       </div>
 

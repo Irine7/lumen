@@ -7,6 +7,7 @@ import type {
   Hex32
 } from "@lumen-aid/shared";
 import { verifyClaimProofLocally } from "@lumen-aid/prover";
+import { Asset, Networks, StrKey, hash as stellarHash } from "@stellar/stellar-sdk";
 
 const DEMO_INITIAL_EVENT_AT = "2026-07-01T00:00:00.000Z";
 
@@ -27,6 +28,7 @@ export interface TestnetCampaignConfig {
   budget: string;
   perRecipientCap: string;
   eligibilityRoot: Hex32;
+  complianceRoot: Hex32;
   denyRoot: Hex32 | null;
   policyHash: Hex32;
   verifierContractId: string;
@@ -43,6 +45,12 @@ export interface TestnetCampaignStats {
   remainingBudget: string;
   duplicateClaimsBlocked: number;
   invalidClaimsBlocked: number;
+}
+
+export interface TestnetEscrowBalance {
+  network: "testnet";
+  contractId: string;
+  balance: string;
 }
 
 export interface TestnetVerifierStatus {
@@ -85,6 +93,34 @@ type StellarScVal = ReturnType<StellarSdk["nativeToScVal"]>;
 
 const READ_ONLY_SIMULATION_SOURCE =
   "GDRCC7MJVHXPNTEWV7IT525DPKOBHWOLK2GJB44736OO37IIJVL3WIDD";
+
+function bytesToHex(bytes: Uint8Array): string {
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+export function canonicalStellarAddressBytes(address: string): Uint8Array {
+  const value = address.trim();
+  if (StrKey.isValidEd25519PublicKey(value)) {
+    return Uint8Array.from(StrKey.decodeEd25519PublicKey(value));
+  }
+  if (StrKey.isValidContract(value)) {
+    return Uint8Array.from(StrKey.decodeContract(value));
+  }
+
+  throw new Error("Expected a valid Stellar account or contract address");
+}
+
+export function derivePayoutAccountHash(payoutAddress: string): Hex32 {
+  const canonical = canonicalStellarAddressBytes(payoutAddress);
+  const digest = Uint8Array.from(stellarHash(canonical as Buffer));
+  const fieldBytes = new Uint8Array(32);
+  fieldBytes.set(digest.slice(0, 31), 1);
+  return `0x${bytesToHex(fieldBytes)}` as Hex32;
+}
+
+export function nativeTestnetAssetContractId(): string {
+  return Asset.native().contractId(Networks.TESTNET);
+}
 
 export interface SubmitClaimResult {
   ok: boolean;
@@ -246,9 +282,11 @@ async function malformedVerifierArgs(): Promise<StellarScVal[]> {
     amount: 1n,
     amount_commitment: hexToBytes(zero),
     campaign_id: hexToBytes(zero),
+    compliance_root: hexToBytes(zero),
     eligibility_root: hexToBytes(zero),
     max_amount: 1n,
     nullifier_hash: hexToBytes(zero),
+    payout_account_hash: hexToBytes(zero),
     policy_hash: hexToBytes(zero),
     recipient_commitment: hexToBytes(zero)
   };
@@ -256,9 +294,11 @@ async function malformedVerifierArgs(): Promise<StellarScVal[]> {
     amount: ["symbol", "i128"],
     amount_commitment: ["symbol", "bytes"],
     campaign_id: ["symbol", "bytes"],
+    compliance_root: ["symbol", "bytes"],
     eligibility_root: ["symbol", "bytes"],
     max_amount: ["symbol", "i128"],
     nullifier_hash: ["symbol", "bytes"],
+    payout_account_hash: ["symbol", "bytes"],
     policy_hash: ["symbol", "bytes"],
     recipient_commitment: ["symbol", "bytes"]
   };
@@ -295,6 +335,7 @@ export async function getCampaignConfig(
         budget: valueToString(value.budget, "budget"),
         perRecipientCap: valueToString(value.per_recipient_cap, "per_recipient_cap"),
         eligibilityRoot: bytesToHex32(value.eligibility_root, "eligibility_root"),
+        complianceRoot: bytesToHex32(value.compliance_root, "compliance_root"),
         denyRoot: nullableBytesToHex32(value.deny_root, "deny_root"),
         policyHash: bytesToHex32(value.policy_hash, "policy_hash"),
         verifierContractId: String(value.verifier),
@@ -339,6 +380,34 @@ async function getTestnetCampaignStats(
           value.invalid_claims_blocked,
           "invalid_claims_blocked"
         )
+      }
+    };
+  } catch (error) {
+    return readError(error);
+  }
+}
+
+export async function getCampaignEscrowBalance(
+  config: LumenStellarEnv
+): Promise<StellarReadResult<TestnetEscrowBalance>> {
+  const missing = missingBaseReadConfig(config);
+  if (missing.length > 0) {
+    return notConfigured(missing);
+  }
+
+  try {
+    const value = await simulateContractCall(
+      config,
+      config.campaignContractId,
+      "get_escrow_balance"
+    );
+
+    return {
+      status: "ready",
+      data: {
+        network: "testnet",
+        contractId: config.campaignContractId,
+        balance: valueToString(value, "escrow balance")
       }
     };
   } catch (error) {
@@ -498,10 +567,15 @@ export class LocalLumenSorobanClient {
     );
   }
 
-  updateRoots(newEligibilityRoot: Hex32, newDenyRoot: Hex32 | null): CampaignConfig {
+  updateRoots(
+    newEligibilityRoot: Hex32,
+    newComplianceRoot: Hex32,
+    newDenyRoot: Hex32 | null
+  ): CampaignConfig {
     this.snapshot.campaign = {
       ...this.snapshot.campaign,
       eligibilityRoot: newEligibilityRoot,
+      complianceRoot: newComplianceRoot,
       denyRoot: newDenyRoot
     };
     this.snapshot.events.push(event("roots_updated", "Operator updated campaign roots"));
@@ -524,7 +598,8 @@ export class LocalLumenSorobanClient {
 
   async submitClaim(
     publicInputs: ClaimPublicInputs,
-    proof: ClaimProofEnvelope
+    proof: ClaimProofEnvelope,
+    payoutAddress?: string
   ): Promise<SubmitClaimResult> {
     const campaign = this.snapshot.campaign;
 
@@ -573,6 +648,10 @@ export class LocalLumenSorobanClient {
       return reject("invalid_rejected", "Wrong eligibility root", publicInputs.nullifierHash);
     }
 
+    if (publicInputs.complianceRoot.toLowerCase() !== campaign.complianceRoot.toLowerCase()) {
+      return reject("invalid_rejected", "Wrong compliance root", publicInputs.nullifierHash);
+    }
+
     if (publicInputs.policyHash.toLowerCase() !== campaign.policyHash.toLowerCase()) {
       return reject("invalid_rejected", "Wrong policy hash", publicInputs.nullifierHash);
     }
@@ -587,6 +666,18 @@ export class LocalLumenSorobanClient {
 
     if (this.snapshot.stats.remainingBudget < publicInputs.amount) {
       return reject("invalid_rejected", "Campaign budget exhausted", publicInputs.nullifierHash);
+    }
+
+    if (
+      payoutAddress &&
+      derivePayoutAccountHash(payoutAddress).toLowerCase() !==
+        publicInputs.payoutAccountHash.toLowerCase()
+    ) {
+      return reject(
+        "invalid_rejected",
+        "Payout address does not match the proof binding",
+        publicInputs.nullifierHash
+      );
     }
 
     if (this.isNullifierUsed(publicInputs.nullifierHash)) {
@@ -652,9 +743,10 @@ export async function createCampaign(
 export async function submitClaim(
   client: LocalLumenSorobanClient,
   publicInputs: ClaimPublicInputs,
-  proof: ClaimProofEnvelope
+  proof: ClaimProofEnvelope,
+  payoutAddress?: string
 ): Promise<SubmitClaimResult> {
-  return client.submitClaim(publicInputs, proof);
+  return client.submitClaim(publicInputs, proof, payoutAddress);
 }
 
 export function getCampaignStats(client: LocalLumenSorobanClient): Promise<CampaignStats>;

@@ -1,12 +1,15 @@
 import type { ClaimPrivateInputs, ClaimPublicInputs, DemoRecipient, Hex32 } from "@lumen-aid/shared";
 import {
+  buildDemoComplianceTree,
   buildDemoEligibilityTree,
+  createComplianceLeaf,
   createEligibilityLeaf,
   derivePublicInputs,
   getMerkleProofForRecipient,
   toFieldString,
   verifyMerkleProofLocally
 } from "@lumen-aid/merkle";
+import { derivePayoutAccountHash } from "@lumen-aid/stellar";
 import type {
   BrowserClaimProofWorkerMessage,
   BrowserClaimProofWorkerRequest,
@@ -74,12 +77,14 @@ function expectedPublicSignals(publicInputs: ClaimPublicInputs): string[] {
   return [
     field(publicInputs.campaignId),
     field(publicInputs.eligibilityRoot),
+    field(publicInputs.complianceRoot),
     field(publicInputs.policyHash),
     field(publicInputs.nullifierHash),
     publicInputs.amount.toString(),
     publicInputs.maxAmount.toString(),
     field(publicInputs.amountCommitment),
-    field(publicInputs.recipientCommitment)
+    field(publicInputs.recipientCommitment),
+    field(publicInputs.payoutAccountHash)
   ];
 }
 
@@ -90,9 +95,14 @@ function privateInputsForRecipient(input: {
   publicInputs: ClaimPublicInputs;
 }): ClaimPrivateInputs {
   const tree = buildDemoEligibilityTree(input.recipients);
+  const complianceTree = buildDemoComplianceTree(input.recipients);
   const merkleProof = getMerkleProofForRecipient(tree, input.recipient);
   if (!merkleProof) {
     throw new Error("Recipient is not included in the active eligibility tree");
+  }
+  const complianceMerkleProof = getMerkleProofForRecipient(complianceTree, input.recipient);
+  if (!complianceMerkleProof) {
+    throw new Error("Recipient is not included in the active compliance clearance tree");
   }
 
   const expectedLeaf = createEligibilityLeaf({
@@ -109,14 +119,38 @@ function privateInputsForRecipient(input: {
     throw new Error("Recipient Merkle path does not resolve to the active testnet root");
   }
 
+  const expectedComplianceLeaf = createComplianceLeaf({
+    recipientSecret: input.recipient.recipientSecret,
+    identityHash: input.recipient.identityHash,
+    complianceLeafSalt: input.recipient.complianceLeafSalt,
+    policyHash: input.campaign.policyHash
+  });
+  if (expectedComplianceLeaf.toLowerCase() !== complianceMerkleProof.leaf.toLowerCase()) {
+    throw new Error("Recipient witness does not match the compliance Merkle leaf");
+  }
+
+  if (
+    !verifyMerkleProofLocally(
+      complianceMerkleProof.leaf,
+      complianceMerkleProof,
+      input.campaign.complianceRoot
+    )
+  ) {
+    throw new Error("Recipient Merkle path does not resolve to the active compliance root");
+  }
+
   return {
     recipientSecret: input.recipient.recipientSecret,
     identityHash: input.recipient.identityHash,
     leafSalt: input.recipient.leafSalt,
     eligibilityMerklePath: merkleProof.path,
     eligibilityMerkleIndices: merkleProof.indices,
+    complianceLeafSalt: input.recipient.complianceLeafSalt,
+    complianceMerklePath: complianceMerkleProof.path,
+    complianceMerkleIndices: complianceMerkleProof.indices,
     amountSalt: input.recipient.amountSalt,
-    eligibilityReason: input.recipient.eligibilityReason
+    eligibilityReason: input.recipient.eligibilityReason,
+    complianceStatus: input.recipient.complianceStatus
   };
 }
 
@@ -130,15 +164,20 @@ function circuitInputs(
     leaf_salt: field(privateInputs.leafSalt),
     eligibility_merkle_path: privateInputs.eligibilityMerklePath.map((item) => field(item)),
     eligibility_merkle_indices: privateInputs.eligibilityMerkleIndices,
+    compliance_leaf_salt: field(privateInputs.complianceLeafSalt),
+    compliance_merkle_path: privateInputs.complianceMerklePath.map((item) => field(item)),
+    compliance_merkle_indices: privateInputs.complianceMerkleIndices,
     amount_salt: field(privateInputs.amountSalt),
     campaign_id: field(publicInputs.campaignId),
     eligibility_root: field(publicInputs.eligibilityRoot),
+    compliance_root: field(publicInputs.complianceRoot),
     policy_hash: field(publicInputs.policyHash),
     nullifier_hash: field(publicInputs.nullifierHash),
     amount: publicInputs.amount.toString(),
     max_amount: publicInputs.maxAmount.toString(),
     amount_commitment: field(publicInputs.amountCommitment),
-    recipient_commitment: field(publicInputs.recipientCommitment)
+    recipient_commitment: field(publicInputs.recipientCommitment),
+    payout_account_hash: field(publicInputs.payoutAccountHash)
   };
 }
 
@@ -151,6 +190,9 @@ function validateRequest(request: BrowserClaimProofWorkerRequest): void {
   }
   if (!request.campaign.isActive) {
     throw new Error("Active testnet campaign is not open");
+  }
+  if (!request.payoutAddress && !request.payoutAccountHash) {
+    throw new Error("A payout address is required before generating a bound proof");
   }
 }
 
@@ -175,7 +217,10 @@ async function prove(request: BrowserClaimProofWorkerRequest): Promise<void> {
   const publicInputs = derivePublicInputs({
     campaign: request.campaign,
     recipient: request.recipient,
-    amount: request.amount
+    amount: request.amount,
+    payoutAccountHash:
+      request.payoutAccountHash ??
+      derivePayoutAccountHash(request.payoutAddress ?? "")
   });
   const privateInputs = privateInputsForRecipient({
     campaign: request.campaign,
@@ -244,4 +289,3 @@ self.onmessage = (event: MessageEvent<BrowserClaimProofWorkerRequest>) => {
 };
 
 export {};
-

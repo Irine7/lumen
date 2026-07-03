@@ -12,7 +12,7 @@ import {
   writeJson
 } from "./zk";
 
-const PTAU_POWER = "12";
+const PTAU_POWER = "13";
 const PTAU_CURVE = "bn128";
 const PTAU_BEACON =
   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -119,7 +119,7 @@ async function main(): Promise<void> {
       "claim.sym",
       "claim_js/claim.wasm",
       "claim_js/generate_witness.js",
-      "pot12_final.ptau",
+      "pot13_final.ptau",
       "claim_final.zkey",
       "verification_key.json"
     ]

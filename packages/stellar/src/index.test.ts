@@ -68,6 +68,17 @@ describe("local Soroban-shaped campaign client", () => {
       client.submitClaim(
         {
           ...proof.publicInputs,
+          complianceRoot:
+            "0x0000000000000000000000000000000000000000000000000000000000000004"
+        },
+        proof.proof
+      )
+    ).resolves.toMatchObject({ ok: false, status: "invalid_rejected" });
+
+    await expect(
+      client.submitClaim(
+        {
+          ...proof.publicInputs,
           policyHash:
             "0x0000000000000000000000000000000000000000000000000000000000000002"
         },

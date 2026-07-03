@@ -7,7 +7,11 @@ import type {
   DemoRecipient
 } from "@lumen-aid/shared";
 import { demoRecipients } from "@lumen-aid/shared";
-import { buildDemoEligibilityTree, createDemoCampaignConfig } from "@lumen-aid/merkle";
+import {
+  buildDemoComplianceTree,
+  buildDemoEligibilityTree,
+  createDemoCampaignConfig
+} from "@lumen-aid/merkle";
 import { generateClaimProof } from "@lumen-aid/prover";
 import { createLocalLumenClient } from "@lumen-aid/stellar";
 import type { LumenCampaignSnapshot, SubmitClaimResult } from "@lumen-aid/stellar";
@@ -16,7 +20,8 @@ const STORAGE_KEY = "lumen-aid-demo-state-v0";
 
 export function createInitialSnapshot(): LumenCampaignSnapshot {
   const tree = buildDemoEligibilityTree();
-  const campaign = createDemoCampaignConfig(tree);
+  const complianceTree = buildDemoComplianceTree();
+  const campaign = createDemoCampaignConfig(tree, complianceTree);
   return createLocalLumenClient(campaign).exportSnapshot();
 }
 
@@ -54,6 +59,7 @@ export function useLumenDemo() {
   }, []);
 
   const tree = useMemo(() => buildDemoEligibilityTree(), []);
+  const complianceTree = useMemo(() => buildDemoComplianceTree(), []);
 
   const persist = useCallback((next: LumenCampaignSnapshot) => {
     writeSnapshot(next);
@@ -90,10 +96,11 @@ export function useLumenDemo() {
         mode: "dev_verifier",
         campaign: snapshot.campaign,
         tree,
+        complianceTree,
         recipient,
         amount
       }),
-    [snapshot.campaign, tree]
+    [complianceTree, snapshot.campaign, tree]
   );
 
   const submitProof = useCallback(
@@ -114,6 +121,7 @@ export function useLumenDemo() {
     events: snapshot.events,
     recipients: demoRecipients,
     tree,
+    complianceTree,
     resetDemo,
     createCampaign,
     updateCampaign,

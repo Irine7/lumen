@@ -1,4 +1,14 @@
 import { spawnSync } from "node:child_process";
+import { assertLocalStellarSourceAccount, loadEnvFiles } from "./lib/load-env";
+
+loadEnvFiles();
+
+try {
+  assertLocalStellarSourceAccount();
+} catch (error) {
+  console.error(error instanceof Error ? error.message : error);
+  process.exit(1);
+}
 
 const TESTNET_NETWORK = "testnet";
 const TESTNET_RPC_URL = "https://soroban-testnet.stellar.org";

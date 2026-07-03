@@ -78,6 +78,9 @@ async function main(): Promise<void> {
   if (strip0x(bob.campaign.eligibilityRoot) !== strip0x(campaignState.eligibilityRoot)) {
     throw new Error("Bob fixture eligibility root does not match deployed campaign metadata");
   }
+  if (strip0x(bob.campaign.complianceRoot) !== strip0x(campaignState.complianceRoot)) {
+    throw new Error("Bob fixture compliance root does not match deployed campaign metadata");
+  }
   if (strip0x(bob.campaign.policyHash) !== strip0x(campaignState.policyHash)) {
     throw new Error("Bob fixture policy hash does not match deployed campaign metadata");
   }

@@ -11,13 +11,15 @@ import type {
   Hex32,
   MerkleProof
 } from "@lumen-aid/shared";
-import { demoRecipients } from "@lumen-aid/shared";
+import { DEMO_PAYOUT_ACCOUNT_HASH, demoRecipients } from "@lumen-aid/shared";
 import {
+  buildDemoComplianceTree,
   buildDemoEligibilityTree,
   createDemoCampaignConfig,
   derivePublicInputs,
   getMerkleProofForRecipient,
   toFieldString,
+  type DemoComplianceTree,
   type DemoEligibilityTree
 } from "@lumen-aid/merkle";
 
@@ -41,10 +43,10 @@ export const artifactPaths = {
   sym: join(buildDir, "claim.sym"),
   wasm: join(buildDir, "claim_js", "claim.wasm"),
   witnessGenerator: join(buildDir, "claim_js", "generate_witness.js"),
-  pot0: join(buildDir, "pot12_0000.ptau"),
-  pot1: join(buildDir, "pot12_0001.ptau"),
-  potBeacon: join(buildDir, "pot12_beacon.ptau"),
-  potFinal: join(buildDir, "pot12_final.ptau"),
+  pot0: join(buildDir, "pot13_0000.ptau"),
+  pot1: join(buildDir, "pot13_0001.ptau"),
+  potBeacon: join(buildDir, "pot13_beacon.ptau"),
+  potFinal: join(buildDir, "pot13_final.ptau"),
   zkey0: join(buildDir, "claim_0000.zkey"),
   zkeyFinal: join(buildDir, "claim_final.zkey"),
   verificationKey: join(buildDir, "verification_key.json"),
@@ -93,9 +95,11 @@ export interface ResolvedTool {
 
 export interface DemoCircuitCase {
   tree: DemoEligibilityTree;
+  complianceTree: DemoComplianceTree;
   campaign: CampaignConfig;
   recipient: DemoRecipient;
   merkleProof: MerkleProof | null;
+  complianceMerkleProof: MerkleProof | null;
   publicInputs: ClaimPublicInputs;
   privateInputs?: ClaimPrivateInputs;
   circuitInputs?: Record<string, string | string[] | number[]>;
@@ -308,12 +312,14 @@ export function publicSignalsFromInputs(publicInputs: ClaimPublicInputs): string
   return [
     field(publicInputs.campaignId),
     field(publicInputs.eligibilityRoot),
+    field(publicInputs.complianceRoot),
     field(publicInputs.policyHash),
     field(publicInputs.nullifierHash),
     publicInputs.amount.toString(),
     publicInputs.maxAmount.toString(),
     field(publicInputs.amountCommitment),
-    field(publicInputs.recipientCommitment)
+    field(publicInputs.recipientCommitment),
+    field(publicInputs.payoutAccountHash)
   ];
 }
 
@@ -329,15 +335,22 @@ export function formatCircuitInputs(
       field(item)
     ),
     eligibility_merkle_indices: privateInputs.eligibilityMerkleIndices,
+    compliance_leaf_salt: field(privateInputs.complianceLeafSalt),
+    compliance_merkle_path: privateInputs.complianceMerklePath.map((item) =>
+      field(item)
+    ),
+    compliance_merkle_indices: privateInputs.complianceMerkleIndices,
     amount_salt: field(privateInputs.amountSalt),
     campaign_id: field(publicInputs.campaignId),
     eligibility_root: field(publicInputs.eligibilityRoot),
+    compliance_root: field(publicInputs.complianceRoot),
     policy_hash: field(publicInputs.policyHash),
     nullifier_hash: field(publicInputs.nullifierHash),
     amount: publicInputs.amount.toString(),
     max_amount: publicInputs.maxAmount.toString(),
     amount_commitment: field(publicInputs.amountCommitment),
-    recipient_commitment: field(publicInputs.recipientCommitment)
+    recipient_commitment: field(publicInputs.recipientCommitment),
+    payout_account_hash: field(publicInputs.payoutAccountHash)
   };
 }
 
@@ -347,11 +360,14 @@ export function createDemoCircuitCase(options: {
   recipients?: DemoRecipient[];
   campaignOverride?: Partial<CampaignConfig>;
   merkleProofOverride?: MerkleProof | null;
+  complianceMerkleProofOverride?: MerkleProof | null;
+  payoutAccountHash?: Hex32;
 }): DemoCircuitCase {
   const recipients = options.recipients ?? demoRecipients;
   const tree = buildDemoEligibilityTree(recipients);
+  const complianceTree = buildDemoComplianceTree(recipients);
   const campaign = {
-    ...createDemoCampaignConfig(tree),
+    ...createDemoCampaignConfig(tree, complianceTree),
     ...options.campaignOverride
   };
   const recipient = recipients.find((item) => item.id === options.recipientId);
@@ -364,18 +380,37 @@ export function createDemoCircuitCase(options: {
     options.merkleProofOverride === undefined
       ? getMerkleProofForRecipient(tree, recipient)
       : options.merkleProofOverride;
+  const complianceMerkleProof =
+    options.complianceMerkleProofOverride === undefined
+      ? getMerkleProofForRecipient(complianceTree, recipient)
+      : options.complianceMerkleProofOverride;
   const publicInputs = derivePublicInputs({
     campaign,
     recipient,
-    amount: options.amount ?? recipient.defaultClaimAmount
+    amount: options.amount ?? recipient.defaultClaimAmount,
+    payoutAccountHash: options.payoutAccountHash ?? DEMO_PAYOUT_ACCOUNT_HASH
   });
 
   if (!merkleProof) {
     return {
       tree,
+      complianceTree,
       campaign,
       recipient,
       merkleProof,
+      complianceMerkleProof,
+      publicInputs
+    };
+  }
+
+  if (!complianceMerkleProof) {
+    return {
+      tree,
+      complianceTree,
+      campaign,
+      recipient,
+      merkleProof,
+      complianceMerkleProof,
       publicInputs
     };
   }
@@ -386,15 +421,21 @@ export function createDemoCircuitCase(options: {
     leafSalt: recipient.leafSalt,
     eligibilityMerklePath: merkleProof.path,
     eligibilityMerkleIndices: merkleProof.indices,
+    complianceLeafSalt: recipient.complianceLeafSalt,
+    complianceMerklePath: complianceMerkleProof.path,
+    complianceMerkleIndices: complianceMerkleProof.indices,
     amountSalt: recipient.amountSalt,
-    eligibilityReason: recipient.eligibilityReason
+    eligibilityReason: recipient.eligibilityReason,
+    complianceStatus: recipient.complianceStatus
   };
 
   return {
     tree,
+    complianceTree,
     campaign,
     recipient,
     merkleProof,
+    complianceMerkleProof,
     publicInputs,
     privateInputs,
     circuitInputs: formatCircuitInputs(privateInputs, publicInputs)
@@ -409,7 +450,8 @@ export function createMalloryWithAlicePathCase(): DemoCircuitCase {
 
   return createDemoCircuitCase({
     recipientId: "mallory",
-    merkleProofOverride: alice.merkleProof
+    merkleProofOverride: alice.merkleProof,
+    complianceMerkleProofOverride: alice.complianceMerkleProof
   });
 }
 
@@ -449,6 +491,15 @@ export async function writeDemoMetadata(demoCase: DemoCircuitCase): Promise<void
     leaves: demoCase.tree.leaves,
     layers: demoCase.tree.layers,
     eligibleRecipients: demoCase.tree.eligibleRecipients.map((recipient) => ({
+      id: recipient.id,
+      displayName: recipient.displayName
+    }))
+  });
+  await writeJson(join(buildDir, "compliance-tree.json"), {
+    root: demoCase.complianceTree.root,
+    leaves: demoCase.complianceTree.leaves,
+    layers: demoCase.complianceTree.layers,
+    compliantRecipients: demoCase.complianceTree.compliantRecipients.map((recipient) => ({
       id: recipient.id,
       displayName: recipient.displayName
     }))

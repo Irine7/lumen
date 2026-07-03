@@ -9,16 +9,21 @@ template Claim(depth) {
   signal input leaf_salt;
   signal input eligibility_merkle_path[depth];
   signal input eligibility_merkle_indices[depth];
+  signal input compliance_leaf_salt;
+  signal input compliance_merkle_path[depth];
+  signal input compliance_merkle_indices[depth];
   signal input amount_salt;
 
   signal input campaign_id;
   signal input eligibility_root;
+  signal input compliance_root;
   signal input policy_hash;
   signal input nullifier_hash;
   signal input amount;
   signal input max_amount;
   signal input amount_commitment;
   signal input recipient_commitment;
+  signal input payout_account_hash;
 
   component leaf_hasher = Poseidon(4);
   leaf_hasher.inputs[0] <== recipient_secret;
@@ -50,6 +55,36 @@ template Claim(depth) {
 
   current[depth] === eligibility_root;
 
+  component compliance_leaf_hasher = Poseidon(4);
+  compliance_leaf_hasher.inputs[0] <== recipient_secret;
+  compliance_leaf_hasher.inputs[1] <== identity_hash;
+  compliance_leaf_hasher.inputs[2] <== compliance_leaf_salt;
+  compliance_leaf_hasher.inputs[3] <== policy_hash;
+
+  signal compliance_current[depth + 1];
+  compliance_current[0] <== compliance_leaf_hasher.out;
+
+  component compliance_path_hashers[depth];
+  signal compliance_left[depth];
+  signal compliance_right[depth];
+  signal compliance_selected_delta[depth];
+
+  for (var j = 0; j < depth; j++) {
+    compliance_merkle_indices[j] * (compliance_merkle_indices[j] - 1) === 0;
+
+    compliance_selected_delta[j] <== compliance_merkle_indices[j] *
+      (compliance_merkle_path[j] - compliance_current[j]);
+    compliance_left[j] <== compliance_current[j] + compliance_selected_delta[j];
+    compliance_right[j] <== compliance_merkle_path[j] - compliance_selected_delta[j];
+
+    compliance_path_hashers[j] = Poseidon(2);
+    compliance_path_hashers[j].inputs[0] <== compliance_left[j];
+    compliance_path_hashers[j].inputs[1] <== compliance_right[j];
+    compliance_current[j + 1] <== compliance_path_hashers[j].out;
+  }
+
+  compliance_current[depth] === compliance_root;
+
   component nullifier_hasher = Poseidon(2);
   nullifier_hasher.inputs[0] <== recipient_secret;
   nullifier_hasher.inputs[1] <== campaign_id;
@@ -61,9 +96,10 @@ template Claim(depth) {
   amount_commitment_hasher.inputs[2] <== campaign_id;
   amount_commitment_hasher.out === amount_commitment;
 
-  component recipient_commitment_hasher = Poseidon(2);
+  component recipient_commitment_hasher = Poseidon(3);
   recipient_commitment_hasher.inputs[0] <== recipient_secret;
   recipient_commitment_hasher.inputs[1] <== policy_hash;
+  recipient_commitment_hasher.inputs[2] <== payout_account_hash;
   recipient_commitment_hasher.out === recipient_commitment;
 
   component cap_check = LessEqThan(64);
@@ -75,10 +111,12 @@ template Claim(depth) {
 component main { public [
   campaign_id,
   eligibility_root,
+  compliance_root,
   policy_hash,
   nullifier_hash,
   amount,
   max_amount,
   amount_commitment,
-  recipient_commitment
-] } = Claim(2);
+  recipient_commitment,
+  payout_account_hash
+] } = Claim(3);

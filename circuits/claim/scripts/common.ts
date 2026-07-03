@@ -7,8 +7,9 @@ import type {
   ClaimPublicInputs,
   Hex32
 } from "@lumen-aid/shared";
-import { demoRecipients } from "@lumen-aid/shared";
+import { DEMO_PAYOUT_ACCOUNT_HASH, demoRecipients } from "@lumen-aid/shared";
 import {
+  buildDemoComplianceTree,
   buildDemoEligibilityTree,
   createDemoCampaignConfig,
   deriveNullifier,
@@ -43,7 +44,8 @@ export async function createAliceDemoProof() {
 
 export async function createProofPathDemo() {
   const tree = buildDemoEligibilityTree();
-  const campaign = createDemoCampaignConfig(tree);
+  const complianceTree = buildDemoComplianceTree();
+  const campaign = createDemoCampaignConfig(tree, complianceTree);
   const alice = demoRecipients.find((recipient) => recipient.id === "alice");
   const mallory = demoRecipients.find((recipient) => recipient.id === "mallory");
 
@@ -59,8 +61,10 @@ export async function createProofPathDemo() {
     mode: "dev_verifier",
     campaign,
     tree,
+    complianceTree,
     recipient: alice,
-    amount: alice.defaultClaimAmount
+    amount: alice.defaultClaimAmount,
+    payoutAccountHash: DEMO_PAYOUT_ACCOUNT_HASH
   });
   const aliceVerification = await verifyClaimProofLocally(
     aliceResult.proof,
@@ -71,8 +75,10 @@ export async function createProofPathDemo() {
     mode: "dev_verifier",
     campaign,
     tree,
+    complianceTree,
     recipient: alice,
-    amount: alice.defaultClaimAmount
+    amount: alice.defaultClaimAmount,
+    payoutAccountHash: DEMO_PAYOUT_ACCOUNT_HASH
   });
 
   const differentCampaignId =
@@ -85,13 +91,16 @@ export async function createProofPathDemo() {
     mode: "dev_verifier",
     campaign: differentCampaign,
     tree,
+    complianceTree,
     recipient: alice,
-    amount: alice.defaultClaimAmount
+    amount: alice.defaultClaimAmount,
+    payoutAccountHash: DEMO_PAYOUT_ACCOUNT_HASH
   });
 
   const aliceMerkleProof = getMerkleProofForRecipient(tree, alice);
+  const aliceComplianceMerkleProof = getMerkleProofForRecipient(complianceTree, alice);
 
-  if (!aliceMerkleProof) {
+  if (!aliceMerkleProof || !aliceComplianceMerkleProof) {
     throw new Error("Alice Merkle proof is missing");
   }
 
@@ -99,10 +108,13 @@ export async function createProofPathDemo() {
     mode: "dev_verifier",
     campaign,
     tree,
+    complianceTree,
     recipient: mallory,
     amount: mallory.defaultClaimAmount,
+    payoutAccountHash: DEMO_PAYOUT_ACCOUNT_HASH,
     proofOverride: {
-      merkleProof: aliceMerkleProof
+      merkleProof: aliceMerkleProof,
+      complianceMerkleProof: aliceComplianceMerkleProof
     }
   });
   const malloryVerification = await verifyClaimProofLocally(
@@ -136,8 +148,10 @@ export async function createProofPathDemo() {
     mode: aliceResult.mode,
     campaignId: campaign.campaignId,
     eligibilityRoot: campaign.eligibilityRoot,
+    complianceRoot: campaign.complianceRoot,
     policyHash: campaign.policyHash,
     eligibleDemoRecipients: tree.eligibleRecipients.map((recipient) => recipient.id),
+    compliantDemoRecipients: complianceTree.compliantRecipients.map((recipient) => recipient.id),
     alice: {
       amount: alice.defaultClaimAmount,
       proofGenerated: aliceResult.ok,
@@ -166,6 +180,7 @@ export async function createProofPathDemo() {
   return {
     pass,
     tree,
+    complianceTree,
     campaign,
     alice: {
       recipient: alice,
@@ -195,6 +210,15 @@ export async function writeProofPathArtifacts(
     leaves: proofPath.tree.leaves,
     layers: proofPath.tree.layers,
     eligibleRecipients: proofPath.tree.eligibleRecipients.map((recipient) => ({
+      id: recipient.id,
+      displayName: recipient.displayName
+    }))
+  });
+  await writeJson(join(buildDir, "compliance-tree.json"), {
+    root: proofPath.complianceTree.root,
+    leaves: proofPath.complianceTree.leaves,
+    layers: proofPath.complianceTree.layers,
+    compliantRecipients: proofPath.complianceTree.compliantRecipients.map((recipient) => ({
       id: recipient.id,
       displayName: recipient.displayName
     }))
@@ -289,14 +313,21 @@ export function formatCircuitInputs(
       field(item)
     ),
     eligibility_merkle_indices: privateInputs.eligibilityMerkleIndices,
+    compliance_leaf_salt: field(privateInputs.complianceLeafSalt),
+    compliance_merkle_path: privateInputs.complianceMerklePath.map((item) =>
+      field(item)
+    ),
+    compliance_merkle_indices: privateInputs.complianceMerkleIndices,
     amount_salt: field(privateInputs.amountSalt),
     campaign_id: field(publicInputs.campaignId),
     eligibility_root: field(publicInputs.eligibilityRoot),
+    compliance_root: field(publicInputs.complianceRoot),
     policy_hash: field(publicInputs.policyHash),
     nullifier_hash: field(publicInputs.nullifierHash),
     amount: publicInputs.amount.toString(),
     max_amount: publicInputs.maxAmount.toString(),
     amount_commitment: field(publicInputs.amountCommitment),
-    recipient_commitment: field(publicInputs.recipientCommitment)
+    recipient_commitment: field(publicInputs.recipientCommitment),
+    payout_account_hash: field(publicInputs.payoutAccountHash)
   };
 }

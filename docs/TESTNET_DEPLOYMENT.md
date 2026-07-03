@@ -1,6 +1,8 @@
 # Stellar Testnet Deployment
 
-This document describes how to prepare and deploy the current Lumen contracts to Stellar testnet. It does not change protocol logic.
+This document describes how to prepare and deploy Lumen contracts to Stellar testnet. It does not change protocol logic.
+
+For the current compliance-grade payout path, prefer the AIDUSD/native SAC deployment commands in `docs/PAYOUT_FLOW.md` and `docs/COMPLIANCE_FLOW.md`. The mock-token deployment notes below remain useful for legacy/local testnet exercises, but they are not the main real payout path.
 
 ## Status
 
@@ -17,7 +19,7 @@ pnpm stellar:claim:alice-duplicate:testnet
 
 Public testnet contract IDs are recorded in `deployments/testnet.json` after `pnpm stellar:deploy:testnet`. A deployer must provide a funded Stellar CLI source account outside the repository.
 
-Current contract IDs:
+Legacy mock-token contract IDs from an earlier testnet deployment:
 
 ```txt
 verifier   = CCHDSG4NLE4IWNGXOR46OYQRAW7KA4VQQB7NF4BTRH3D4HJIRBDLRR7D
@@ -124,6 +126,8 @@ The output file shape is:
 ```
 
 Private keys are never written to this file.
+
+Fresh compliance-aware active deployment metadata must also include `complianceRoot`, `assetMode`, `assetCode`, and `assetContractId`. AIDUSD deployments must include only public issuer/distributor addresses and contract IDs, never issuer or recipient secret keys.
 
 Manual equivalent commands are below for transparency.
 
@@ -235,10 +239,10 @@ On-chain cryptographic proof verification: real.
 Testnet mode: deployed campaign + real verifier smoke test.
 ```
 
-## Current Blockers Before Claiming Testnet E2E
+## Current Compliance-Aware Testnet Status
 
-- The browser flow still uses the local simulator/dev envelope path.
-- Current public contract IDs are recorded in `deployments/testnet.json`.
+- Browser Groth16 proof generation and browser local verification are implemented.
+- Browser-submitted compliance-aware AIDUSD testnet claims are implemented through the local testnet relayer.
+- Current public active contract IDs are recorded in `deployments/active-testnet.json`.
+- Legacy mock-token deployment notes above remain historical/local reference material.
 - Production trusted setup is not complete.
-
-Until those are resolved, claim only: contracts are deployed and smoke-tested on testnet; browser-based testnet submission is still pending.

@@ -1,6 +1,6 @@
-# Demo Script
+# Historical Draft: Demo Script
 
-This is the recommended 2-3 minute hackathon walkthrough for Lumen.
+This is an older walkthrough draft and is not the current video script. Do not use it for final submission copy; use `README.md`, `docs/VERIFIER_STATUS.md`, and `reports/latest/` for current validated product state.
 
 ## Pre-demo setup
 

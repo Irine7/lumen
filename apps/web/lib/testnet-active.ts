@@ -6,9 +6,15 @@ export type ActiveTestnetDeployment = {
   network: "testnet";
   campaignContractId: string;
   verifierContractId: string;
-  mockTokenContractId: string;
+  mockTokenContractId?: string;
+  assetContractId?: string;
+  assetMode?: "native_xlm_sac" | "aidusd_sac" | "mock_token";
+  assetCode?: string;
+  assetIssuer?: string;
+  escrowFunded?: string;
   campaignId: Hex32;
   eligibilityRoot: Hex32;
+  complianceRoot: Hex32;
   policyHash: Hex32;
   operator: string;
   asset: string;
@@ -33,7 +39,9 @@ export type ActiveTestnetDeployment = {
     id: DemoRecipient["id"];
     displayName: string;
     eligible: boolean;
+    compliant?: boolean;
     defaultClaimAmount: number;
+    payoutAddress?: string;
   }[];
   notes: string;
 };
@@ -55,10 +63,11 @@ export function activeToCampaign(active: ActiveTestnetDeployment): CampaignConfi
     campaignId: active.campaignId,
     name: "Active Stellar Testnet Campaign",
     operator: active.operator,
-    asset: active.mockTokenContractId,
+    asset: active.assetContractId ?? active.mockTokenContractId ?? active.asset,
     budget: Number(active.budget),
     perRecipientCap: Number(active.perRecipientCap),
     eligibilityRoot: active.eligibilityRoot,
+    complianceRoot: active.complianceRoot,
     denyRoot: null,
     policyHash: active.policyHash,
     verifier: active.verifierContractId,
@@ -74,7 +83,7 @@ export function activeToStellarEnv(active: ActiveTestnetDeployment): LumenStella
     rpcUrl: process.env.NEXT_PUBLIC_RPC_URL ?? "",
     campaignContractId: active.campaignContractId,
     verifierContractId: active.verifierContractId,
-    mockTokenContractId: active.mockTokenContractId
+    mockTokenContractId: active.mockTokenContractId ?? active.assetContractId ?? ""
   };
 }
 
@@ -85,4 +94,3 @@ export function verifierModeLabel(active: ActiveTestnetDeployment): string {
 
   return `Verifier mode: ${active.verifierInfo.mode}`;
 }
-

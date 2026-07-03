@@ -1,7 +1,8 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { testnetDemoRecipients } from "@lumen-aid/shared";
+import { DEMO_PAYOUT_ADDRESS, testnetDemoRecipients } from "@lumen-aid/shared";
+import { derivePayoutAccountHash } from "@lumen-aid/stellar";
 import {
   artifactPaths,
   assertBuildArtifactsPresent,
@@ -73,12 +74,14 @@ async function proofHex(path: string): Promise<string> {
 }
 
 function campaignOverride(active: ActiveTestnetDeployment) {
+  const asset = active.assetContractId ?? active.mockTokenContractId ?? active.asset;
   return {
     campaignId: active.campaignId,
     eligibilityRoot: active.eligibilityRoot,
+    complianceRoot: active.complianceRoot,
     policyHash: active.policyHash,
     operator: active.operator,
-    asset: active.mockTokenContractId,
+    asset,
     verifier: active.verifierContractId,
     budget: Number(active.budget),
     perRecipientCap: Number(active.perRecipientCap),
@@ -88,15 +91,24 @@ function campaignOverride(active: ActiveTestnetDeployment) {
   };
 }
 
+function activePayoutAddress(active: ActiveTestnetDeployment, recipientId: string): string {
+  return (
+    active.recipients.find((item) => item.id === recipientId)?.payoutAddress ??
+    DEMO_PAYOUT_ADDRESS
+  );
+}
+
 async function generateProof(args: {
   active: ActiveTestnetDeployment;
   recipientId: "charlie";
+  payoutAddress: string;
   tempDir: string;
 }) {
   const demoCase = createDemoCircuitCase({
     recipientId: args.recipientId,
     recipients: testnetDemoRecipients,
-    campaignOverride: campaignOverride(args.active)
+    campaignOverride: campaignOverride(args.active),
+    payoutAccountHash: derivePayoutAccountHash(args.payoutAddress)
   });
   assertCircuitInputs(demoCase);
 
@@ -180,6 +192,7 @@ async function main(): Promise<void> {
     const { demoCase: charlie, proof } = await generateProof({
       active,
       recipientId: "charlie",
+      payoutAddress: activePayoutAddress(active, "charlie"),
       tempDir
     });
     ok("Charlie proof generated");
@@ -204,7 +217,14 @@ async function main(): Promise<void> {
       contractId: active.campaignContractId,
       sourceAccount,
       fn: "claim",
-      fnArgs: ["--public_inputs-file-path", charliePublicInputsPath, "--proof", proof]
+      fnArgs: [
+        "--public_inputs-file-path",
+        charliePublicInputsPath,
+        "--proof",
+        proof,
+        "--payout_recipient",
+        activePayoutAddress(active, "charlie")
+      ]
     });
     if (claim.status !== 0) {
       throw new Error("Charlie claim failed on testnet");
@@ -215,7 +235,14 @@ async function main(): Promise<void> {
       contractId: active.campaignContractId,
       sourceAccount,
       fn: "claim",
-      fnArgs: ["--public_inputs-file-path", charliePublicInputsPath, "--proof", proof],
+      fnArgs: [
+        "--public_inputs-file-path",
+        charliePublicInputsPath,
+        "--proof",
+        proof,
+        "--payout_recipient",
+        activePayoutAddress(active, "charlie")
+      ],
       allowFailure: true
     });
     if (duplicate.status === 0 || !outputContainsContractError(duplicate, 10)) {
@@ -226,12 +253,24 @@ async function main(): Promise<void> {
     const mallory = createDemoCircuitCase({
       recipientId: "mallory",
       recipients: testnetDemoRecipients,
-      campaignOverride: campaignOverride(active)
+      campaignOverride: campaignOverride(active),
+      payoutAccountHash: derivePayoutAccountHash(activePayoutAddress(active, "mallory"))
     });
     if (mallory.circuitInputs) {
       throw new Error("Mallory unexpectedly produced private circuit inputs");
     }
     ok("Mallory rejected locally");
+
+    const eve = createDemoCircuitCase({
+      recipientId: "eve",
+      recipients: testnetDemoRecipients,
+      campaignOverride: campaignOverride(active),
+      payoutAccountHash: derivePayoutAccountHash(activePayoutAddress(active, "eve"))
+    });
+    if (eve.circuitInputs) {
+      throw new Error("Eve unexpectedly produced private circuit inputs without compliance clearance");
+    }
+    ok("Non-compliant Eve rejected locally");
 
     const malformed = invokeContract({
       contractId: active.verifierContractId,
@@ -255,7 +294,14 @@ async function main(): Promise<void> {
       contractId: active.campaignContractId,
       sourceAccount,
       fn: "claim",
-      fnArgs: ["--public_inputs-file-path", wrongRootPath, "--proof", proof],
+      fnArgs: [
+        "--public_inputs-file-path",
+        wrongRootPath,
+        "--proof",
+        proof,
+        "--payout_recipient",
+        activePayoutAddress(active, "charlie")
+      ],
       allowFailure: true,
       send: "no",
       suppressOutput: true
@@ -264,6 +310,35 @@ async function main(): Promise<void> {
       throw new Error("Wrong root was not rejected");
     }
     ok("Wrong root rejected");
+
+    const wrongComplianceRootPath = join(tempDir, "wrong-compliance-root-public-inputs.arg.json");
+    await writePublicInputsArg(wrongComplianceRootPath, {
+      ...charlie.publicInputs,
+      complianceRoot: "0x0000000000000000000000000000000000000000000000000000000000000003"
+    });
+    const wrongComplianceRoot = invokeContract({
+      contractId: active.campaignContractId,
+      sourceAccount,
+      fn: "claim",
+      fnArgs: [
+        "--public_inputs-file-path",
+        wrongComplianceRootPath,
+        "--proof",
+        proof,
+        "--payout_recipient",
+        activePayoutAddress(active, "charlie")
+      ],
+      allowFailure: true,
+      send: "no",
+      suppressOutput: true
+    });
+    if (
+      wrongComplianceRoot.status === 0 ||
+      !outputContainsContractError(wrongComplianceRoot, 16)
+    ) {
+      throw new Error("Wrong compliance root was not rejected");
+    }
+    ok("Wrong compliance root rejected");
 
     const wrongPolicyPath = join(tempDir, "wrong-policy-public-inputs.arg.json");
     await writePublicInputsArg(wrongPolicyPath, {
@@ -274,7 +349,14 @@ async function main(): Promise<void> {
       contractId: active.campaignContractId,
       sourceAccount,
       fn: "claim",
-      fnArgs: ["--public_inputs-file-path", wrongPolicyPath, "--proof", proof],
+      fnArgs: [
+        "--public_inputs-file-path",
+        wrongPolicyPath,
+        "--proof",
+        proof,
+        "--payout_recipient",
+        activePayoutAddress(active, "charlie")
+      ],
       allowFailure: true,
       send: "no",
       suppressOutput: true
@@ -288,7 +370,8 @@ async function main(): Promise<void> {
       recipientId: "charlie",
       recipients: testnetDemoRecipients,
       amount: Number(active.perRecipientCap) + 1,
-      campaignOverride: campaignOverride(active)
+      campaignOverride: campaignOverride(active),
+      payoutAccountHash: derivePayoutAccountHash(activePayoutAddress(active, "charlie"))
     });
     assertCircuitInputs(overCap);
     const overCapInputPath = join(tempDir, "over-cap-input.json");
@@ -323,4 +406,3 @@ main().catch((error) => {
   console.error(error instanceof Error ? error.message : error);
   process.exit(1);
 });
-

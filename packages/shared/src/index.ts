@@ -5,15 +5,19 @@ export type FieldElement = string;
 export type ProofMode = "groth16" | "dev_verifier";
 
 export interface DemoRecipient {
-  id: "alice" | "bob" | "charlie" | "dora" | "mallory";
+  id: "alice" | "bob" | "charlie" | "dora" | "eve" | "mallory";
   displayName: string;
   eligibilityReason: string;
+  complianceStatus: "cleared" | "not_cleared";
   eligible: boolean;
+  compliant: boolean;
   recipientSecret: FieldElement;
   identityHash: FieldElement;
   leafSalt: FieldElement;
+  complianceLeafSalt: FieldElement;
   amountSalt: FieldElement;
   defaultClaimAmount: number;
+  payoutAddress?: string;
 }
 
 export interface CampaignConfig {
@@ -24,6 +28,7 @@ export interface CampaignConfig {
   budget: number;
   perRecipientCap: number;
   eligibilityRoot: Hex32;
+  complianceRoot: Hex32;
   denyRoot: Hex32 | null;
   policyHash: Hex32;
   verifier: string;
@@ -42,7 +47,11 @@ export interface CampaignStats {
 }
 
 export type CampaignEventType =
+  | "campaign_created"
+  | "campaign_funded"
   | "campaign_initialized"
+  | "claim_verified"
+  | "payout_sent"
   | "claim_accepted"
   | "duplicate_rejected"
   | "invalid_rejected"
@@ -69,17 +78,23 @@ export interface ClaimPrivateInputs {
   leafSalt: FieldElement;
   eligibilityMerklePath: Hex32[];
   eligibilityMerkleIndices: number[];
+  complianceLeafSalt: FieldElement;
+  complianceMerklePath: Hex32[];
+  complianceMerkleIndices: number[];
   amountSalt: FieldElement;
   eligibilityReason: string;
+  complianceStatus: DemoRecipient["complianceStatus"];
 }
 
 export interface ClaimPublicInputs {
   campaignId: Hex32;
   eligibilityRoot: Hex32;
+  complianceRoot: Hex32;
   policyHash: Hex32;
   nullifierHash: Hex32;
   amountCommitment: Hex32;
   recipientCommitment: Hex32;
+  payoutAccountHash: Hex32;
   amount: number;
   maxAmount: number;
 }

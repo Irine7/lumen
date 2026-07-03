@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { demoRecipients } from "@lumen-aid/shared";
 import {
+  buildDemoComplianceTree,
   buildDemoEligibilityTree,
+  createComplianceLeaf,
   createDemoCampaignConfig,
   createEligibilityLeaf,
   deriveNullifier,
@@ -19,6 +21,32 @@ describe("lumen-aid Merkle utilities", () => {
     expect(
       verifyMerkleProofLocally(proof.leaf, proof, campaign.eligibilityRoot)
     ).toBe(true);
+  });
+
+  it("verifies compliant recipient membership", () => {
+    const complianceTree = buildDemoComplianceTree();
+    const campaign = createDemoCampaignConfig(undefined, complianceTree);
+    const alice = demoRecipients.find((recipient) => recipient.id === "alice")!;
+    const proof = getMerkleProofForRecipient(complianceTree, alice)!;
+
+    expect(
+      verifyMerkleProofLocally(proof.leaf, proof, campaign.complianceRoot)
+    ).toBe(true);
+  });
+
+  it("keeps Eve outside the compliance tree", () => {
+    const complianceTree = buildDemoComplianceTree();
+    const campaign = createDemoCampaignConfig(undefined, complianceTree);
+    const eve = demoRecipients.find((recipient) => recipient.id === "eve")!;
+    const eveLeaf = createComplianceLeaf({
+      recipientSecret: eve.recipientSecret,
+      identityHash: eve.identityHash,
+      complianceLeafSalt: eve.complianceLeafSalt,
+      policyHash: campaign.policyHash
+    });
+
+    expect(complianceTree.leaves.includes(eveLeaf)).toBe(false);
+    expect(getMerkleProofForRecipient(complianceTree, eve)).toBeNull();
   });
 
   it("rejects a wrong Merkle path", () => {

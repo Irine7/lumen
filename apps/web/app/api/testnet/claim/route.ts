@@ -5,6 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { NextRequest, NextResponse } from "next/server";
 import type { ClaimPublicInputs } from "@lumen-aid/shared";
+import { derivePayoutAccountHash } from "@lumen-aid/stellar";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,9 +14,12 @@ type ActiveDeployment = {
   network: "testnet";
   campaignContractId: string;
   verifierContractId: string;
-  mockTokenContractId: string;
+  mockTokenContractId?: string;
+  assetContractId?: string;
+  assetCode?: string;
   campaignId: string;
   eligibilityRoot: string;
+  complianceRoot: string;
   policyHash: string;
   perRecipientCap: string;
 };
@@ -23,6 +27,7 @@ type ActiveDeployment = {
 type ClaimRequestBody = {
   proofEncodingForSoroban: string;
   publicInputs: ClaimPublicInputs;
+  payoutRecipient: string;
   campaignContractId: string;
   campaignId: string;
 };
@@ -37,7 +42,7 @@ const rateLimit = new Map<string, number[]>();
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 10;
 const PRIVATE_FIELD_PATTERN =
-  /recipient_secret|recipientSecret|identity_hash|identityHash|leaf_salt|leafSalt|amount_salt|amountSalt|merkle|witness|private/i;
+  /recipient_secret|recipientSecret|identity_hash|identityHash|leaf_salt|leafSalt|compliance_leaf_salt|complianceLeafSalt|amount_salt|amountSalt|merkle|witness|private/i;
 
 function findRepoRoot(): string {
   let current = process.cwd();
@@ -144,12 +149,25 @@ function validateBody(body: unknown, active: ActiveDeployment): ClaimRequestBody
 
   normalizeHex32(value.publicInputs.campaignId, "publicInputs.campaignId");
   normalizeHex32(value.publicInputs.eligibilityRoot, "publicInputs.eligibilityRoot");
+  normalizeHex32(value.publicInputs.complianceRoot, "publicInputs.complianceRoot");
   normalizeHex32(value.publicInputs.policyHash, "publicInputs.policyHash");
   normalizeHex32(value.publicInputs.nullifierHash, "publicInputs.nullifierHash");
   normalizeHex32(value.publicInputs.amountCommitment, "publicInputs.amountCommitment");
   normalizeHex32(value.publicInputs.recipientCommitment, "publicInputs.recipientCommitment");
+  normalizeHex32(value.publicInputs.payoutAccountHash, "publicInputs.payoutAccountHash");
   normalizeAmount(value.publicInputs.amount, "publicInputs.amount");
   normalizeAmount(value.publicInputs.maxAmount, "publicInputs.maxAmount");
+
+  if (typeof value.payoutRecipient !== "string" || value.payoutRecipient.trim().length === 0) {
+    throw new Error("Missing payout recipient");
+  }
+  const payoutHash = derivePayoutAccountHash(value.payoutRecipient);
+  if (
+    payoutHash.toLowerCase() !==
+    (value.publicInputs.payoutAccountHash ?? "").toLowerCase()
+  ) {
+    throw new Error("Payout recipient does not match publicInputs.payoutAccountHash");
+  }
 
   if (normalizeHex32(value.publicInputs.campaignId, "campaignId") !== normalizeHex32(active.campaignId, "active campaignId")) {
     throw new Error("Public inputs do not match active campaign ID");
@@ -159,6 +177,12 @@ function validateBody(body: unknown, active: ActiveDeployment): ClaimRequestBody
     normalizeHex32(active.eligibilityRoot, "active eligibilityRoot")
   ) {
     throw new Error("Public inputs do not match active eligibility root");
+  }
+  if (
+    normalizeHex32(value.publicInputs.complianceRoot, "complianceRoot") !==
+    normalizeHex32(active.complianceRoot, "active complianceRoot")
+  ) {
+    throw new Error("Public inputs do not match active compliance root");
   }
   if (normalizeHex32(value.publicInputs.policyHash, "policyHash") !== normalizeHex32(active.policyHash, "active policyHash")) {
     throw new Error("Public inputs do not match active policy hash");
@@ -208,6 +232,9 @@ function contractErrorStatus(result: CommandResult): {
   if (text.includes("Error(Contract, #5)") || text.includes('"code":5')) {
     return { status: "wrong_root_rejected", message: "Wrong eligibility root rejected" };
   }
+  if (text.includes("Error(Contract, #16)") || text.includes('"code":16')) {
+    return { status: "wrong_compliance_root_rejected", message: "Wrong compliance root rejected" };
+  }
   if (text.includes("Error(Contract, #6)") || text.includes('"code":6')) {
     return { status: "wrong_policy_rejected", message: "Wrong policy hash rejected" };
   }
@@ -247,12 +274,86 @@ function publicInputsArg(publicInputs: ClaimPublicInputs) {
     amount: normalizeAmount(publicInputs.amount, "amount"),
     amount_commitment: normalizeHex32(publicInputs.amountCommitment, "amount_commitment"),
     campaign_id: normalizeHex32(publicInputs.campaignId, "campaign_id"),
+    compliance_root: normalizeHex32(publicInputs.complianceRoot, "compliance_root"),
     eligibility_root: normalizeHex32(publicInputs.eligibilityRoot, "eligibility_root"),
     max_amount: normalizeAmount(publicInputs.maxAmount, "max_amount"),
     nullifier_hash: normalizeHex32(publicInputs.nullifierHash, "nullifier_hash"),
+    payout_account_hash: normalizeHex32(publicInputs.payoutAccountHash, "payout_account_hash"),
     policy_hash: normalizeHex32(publicInputs.policyHash, "policy_hash"),
     recipient_commitment: normalizeHex32(publicInputs.recipientCommitment, "recipient_commitment")
   };
+}
+
+function assetContractId(active: ActiveDeployment): string | null {
+  return active.assetContractId ?? active.mockTokenContractId ?? null;
+}
+
+function readBalance(
+  repoRoot: string,
+  active: ActiveDeployment,
+  sourceAccount: string,
+  owner: string
+): string | null {
+  const assetId = assetContractId(active);
+  if (!assetId) {
+    return null;
+  }
+
+  const result = run(
+    "stellar",
+    [
+      "contract",
+      "invoke",
+      "--id",
+      assetId,
+      "--source-account",
+      sourceAccount,
+      "--network",
+      "testnet",
+      "--send",
+      "no",
+      "--",
+      "balance",
+      "--id",
+      owner
+    ],
+    repoRoot
+  );
+  if (result.status !== 0) {
+    return null;
+  }
+  const match = result.stdout.match(/\"?(-?\d+)\"?/);
+  return match?.[1] ?? null;
+}
+
+function readEscrowBalance(
+  repoRoot: string,
+  active: ActiveDeployment,
+  sourceAccount: string
+): string | null {
+  const result = run(
+    "stellar",
+    [
+      "contract",
+      "invoke",
+      "--id",
+      active.campaignContractId,
+      "--source-account",
+      sourceAccount,
+      "--network",
+      "testnet",
+      "--send",
+      "no",
+      "--",
+      "get_escrow_balance"
+    ],
+    repoRoot
+  );
+  if (result.status !== 0) {
+    return null;
+  }
+  const match = result.stdout.match(/\"?(-?\d+)\"?/);
+  return match?.[1] ?? null;
 }
 
 function invokeArgs(args: {
@@ -260,6 +361,7 @@ function invokeArgs(args: {
   sourceAccount: string;
   publicInputsPath: string;
   proof: string;
+  payoutRecipient: string;
   send?: "no";
 }): string[] {
   const cliArgs = [
@@ -281,7 +383,9 @@ function invokeArgs(args: {
     "--public_inputs-file-path",
     args.publicInputsPath,
     "--proof",
-    args.proof
+    args.proof,
+    "--payout_recipient",
+    args.payoutRecipient
   );
   return cliArgs;
 }
@@ -341,6 +445,13 @@ export async function POST(request: NextRequest) {
       `${JSON.stringify(publicInputsArg(body.publicInputs), null, 2)}\n`,
       "utf8"
     );
+    const recipientBalanceBefore = readBalance(
+      repoRoot,
+      active,
+      sourceAccount,
+      body.payoutRecipient
+    );
+    const escrowBalanceBefore = readEscrowBalance(repoRoot, active, sourceAccount);
 
     const simulation = run(
       "stellar",
@@ -349,6 +460,7 @@ export async function POST(request: NextRequest) {
         sourceAccount,
         publicInputsPath,
         proof: body.proofEncodingForSoroban,
+        payoutRecipient: body.payoutRecipient,
         send: "no"
       }),
       repoRoot
@@ -373,7 +485,8 @@ export async function POST(request: NextRequest) {
         active,
         sourceAccount,
         publicInputsPath,
-        proof: body.proofEncodingForSoroban
+        proof: body.proofEncodingForSoroban,
+        payoutRecipient: body.payoutRecipient
       }),
       repoRoot
     );
@@ -392,11 +505,26 @@ export async function POST(request: NextRequest) {
     }
 
     const txHash = parseTxHash(submitted);
+    const recipientBalanceAfter = readBalance(
+      repoRoot,
+      active,
+      sourceAccount,
+      body.payoutRecipient
+    );
+    const escrowBalanceAfter = readEscrowBalance(repoRoot, active, sourceAccount);
     return NextResponse.json({
       ok: true,
       status: "claim_accepted",
-      message: "Claim accepted on Stellar testnet",
+      message: "Payout claim accepted on Stellar testnet",
       txHash,
+      payoutAmount: body.publicInputs.amount,
+      payoutRecipient: body.payoutRecipient,
+      assetContractId: assetContractId(active),
+      assetCode: active.assetCode ?? "unknown",
+      recipientBalanceBefore,
+      recipientBalanceAfter,
+      campaignEscrowBefore: escrowBalanceBefore,
+      campaignEscrowAfter: escrowBalanceAfter,
       readableResult: `${submitted.stdout}\n${submitted.stderr}`.trim(),
       stats: readStats(repoRoot, active, sourceAccount)
     });
@@ -408,4 +536,3 @@ export async function POST(request: NextRequest) {
     }
   }
 }
-

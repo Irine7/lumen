@@ -16,6 +16,13 @@ export interface EligibilityLeafInput {
   policyHash: FieldInput;
 }
 
+export interface ComplianceLeafInput {
+  recipientSecret: FieldInput;
+  identityHash: FieldInput;
+  complianceLeafSalt: FieldInput;
+  policyHash: FieldInput;
+}
+
 export interface EligibilityTree {
   leaves: Hex32[];
   layers: Hex32[][];
@@ -24,6 +31,12 @@ export interface EligibilityTree {
 
 export interface DemoEligibilityTree extends EligibilityTree {
   eligibleRecipients: DemoRecipient[];
+  recipientLeafById: Record<string, Hex32>;
+  recipientIndexById: Record<string, number>;
+}
+
+export interface DemoComplianceTree extends EligibilityTree {
+  compliantRecipients: DemoRecipient[];
   recipientLeafById: Record<string, Hex32>;
   recipientIndexById: Record<string, number>;
 }
@@ -45,7 +58,16 @@ export function createEligibilityLeaf(input: EligibilityLeafInput): Hex32 {
   ]);
 }
 
-export function buildEligibilityTree(leaves: Hex32[], minimumDepth = 2): EligibilityTree {
+export function createComplianceLeaf(input: ComplianceLeafInput): Hex32 {
+  return poseidonHash([
+    input.recipientSecret,
+    input.identityHash,
+    input.complianceLeafSalt,
+    input.policyHash
+  ]);
+}
+
+export function buildEligibilityTree(leaves: Hex32[], minimumDepth = 3): EligibilityTree {
   if (leaves.length === 0) {
     throw new Error("Cannot build an eligibility tree without leaves");
   }
@@ -143,19 +165,24 @@ export function deriveAmountCommitment(
 
 export function deriveRecipientCommitment(
   recipientSecret: FieldInput,
-  policyHash: FieldInput
+  policyHash: FieldInput,
+  payoutAccountHash: FieldInput = ZERO_FIELD
 ): Hex32 {
-  return poseidonHash([recipientSecret, policyHash]);
+  return poseidonHash([recipientSecret, policyHash, payoutAccountHash]);
 }
 
 export function derivePublicInputs(input: {
   campaign: CampaignConfig;
   recipient: DemoRecipient;
   amount: number;
+  payoutAccountHash?: Hex32;
 }): ClaimPublicInputs {
+  const payoutAccountHash = input.payoutAccountHash ?? ZERO_FIELD;
+
   return {
     campaignId: input.campaign.campaignId,
     eligibilityRoot: input.campaign.eligibilityRoot,
+    complianceRoot: input.campaign.complianceRoot,
     policyHash: input.campaign.policyHash,
     nullifierHash: deriveNullifier(
       input.recipient.recipientSecret,
@@ -168,8 +195,10 @@ export function derivePublicInputs(input: {
     ),
     recipientCommitment: deriveRecipientCommitment(
       input.recipient.recipientSecret,
-      input.campaign.policyHash
+      input.campaign.policyHash,
+      payoutAccountHash
     ),
+    payoutAccountHash,
     amount: input.amount,
     maxAmount: input.campaign.perRecipientCap
   };
@@ -205,8 +234,38 @@ export function buildDemoEligibilityTree(
   };
 }
 
+export function buildDemoComplianceTree(
+  recipients: DemoRecipient[] = demoRecipients
+): DemoComplianceTree {
+  const compliantRecipients = recipients.filter((recipient) => recipient.compliant);
+  const recipientLeafById: Record<string, Hex32> = {};
+  const recipientIndexById: Record<string, number> = {};
+
+  const leaves = compliantRecipients.map((recipient, index) => {
+    const leaf = createComplianceLeaf({
+      recipientSecret: recipient.recipientSecret,
+      identityHash: recipient.identityHash,
+      complianceLeafSalt: recipient.complianceLeafSalt,
+      policyHash: demoCampaignSeed.policyHash
+    });
+
+    recipientLeafById[recipient.id] = leaf;
+    recipientIndexById[recipient.id] = index;
+    return leaf;
+  });
+
+  const tree = buildEligibilityTree(leaves);
+
+  return {
+    ...tree,
+    compliantRecipients,
+    recipientLeafById,
+    recipientIndexById
+  };
+}
+
 export function getMerkleProofForRecipient(
-  tree: DemoEligibilityTree,
+  tree: DemoEligibilityTree | DemoComplianceTree,
   recipient: DemoRecipient
 ): MerkleProof | null {
   const index = tree.recipientIndexById[recipient.id];
@@ -218,11 +277,13 @@ export function getMerkleProofForRecipient(
 }
 
 export function createDemoCampaignConfig(
-  tree: EligibilityTree = buildDemoEligibilityTree()
+  tree: EligibilityTree = buildDemoEligibilityTree(),
+  complianceTree: EligibilityTree = buildDemoComplianceTree()
 ): CampaignConfig {
   return {
     ...demoCampaignSeed,
-    eligibilityRoot: tree.root
+    eligibilityRoot: tree.root,
+    complianceRoot: complianceTree.root
   };
 }
 
@@ -230,12 +291,14 @@ export function publicInputsHash(publicInputs: ClaimPublicInputs): Hex32 {
   return poseidonHash([
     publicInputs.campaignId,
     publicInputs.eligibilityRoot,
+    publicInputs.complianceRoot,
     publicInputs.policyHash,
     publicInputs.nullifierHash,
+    publicInputs.amount,
+    publicInputs.maxAmount,
     publicInputs.amountCommitment,
     publicInputs.recipientCommitment,
-    publicInputs.amount,
-    publicInputs.maxAmount
+    publicInputs.payoutAccountHash
   ]);
 }
 
