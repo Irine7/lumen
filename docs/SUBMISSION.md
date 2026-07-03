@@ -1,8 +1,6 @@
-# Historical Draft: DoraHacks Submission Content
+# Lumen DoraHacks Submission
 
-This is an older submission draft and is not final hackathon submission copy. Use `README.md`, `docs/VERIFIER_STATUS.md`, and `reports/latest/` for current validated product state.
-
-## Project title
+## DoraHacks title
 
 Lumen
 
@@ -12,205 +10,131 @@ Private, ZK-compliant aid disbursements on Stellar.
 
 ## Short description
 
-Lumen helps humanitarian aid campaigns distribute Stellar-based assistance without exposing recipient identity trails. Recipients prove eligibility with zero-knowledge membership proofs, while Soroban campaign contracts track aggregate budgets, nullifiers, successful claims, duplicate blocks, and invalid claim attempts for donor accountability.
+Lumen lets aid recipients privately prove eligibility and compliance clearance, then receive AIDUSD testnet payouts from a Soroban escrow. The demo generates a browser Groth16 proof, verifies it locally, submits only proof/public inputs through a relayer, and shows donor/auditor views without publishing recipient identity or private witness data.
 
 ## Full description
 
-Public blockchains are useful for accountable aid distribution, but they can expose vulnerable recipients. A public payment trail may reveal who received disaster relief, medical assistance, household grants, or other sensitive support.
+Public payment rails are useful for humanitarian aid because donors and operators can audit aggregate spending. The same transparency can harm recipients: a public payment trail can reveal who received disaster relief, medical help, or household support, and can expose timing, amount, and wallet relationships.
 
-Lumen is a privacy-preserving aid disbursement prototype built on Stellar and Soroban. Campaign operators publish an eligibility Merkle root and policy hash instead of a recipient list. A recipient generates a claim proof from private identity-derived data, a secret, salts, and a Merkle path. The public claim contains only commitments, a campaign-specific nullifier, the claim amount, and proof bytes.
+Lumen separates private recipient eligibility from public campaign accountability. An operator publishes eligibility and compliance Merkle roots plus a policy hash. A recipient proves, in zero knowledge, that they are in both roots, that their claim is within the cap, and that the payout address is bound into the proof. The public claim carries commitments, a nullifier, amount, payout account hash, and proof bytes, not identity data or Merkle paths.
 
-The Soroban campaign contract enforces campaign rules, rejects duplicate nullifiers, and updates aggregate donor-facing stats. Donors can see total budget, distributed amount, remaining amount, successful claims, duplicate claims blocked, invalid claims blocked, privacy status, and verifier status without seeing recipient identities or eligibility reasons.
+Stellar is a strong fit because it is built for low-cost payments, stablecoin-style assets, fast settlement, and Soroban smart contracts. In the current demo, a Soroban campaign contract holds AIDUSD/SAC escrow, calls a real Groth16 verifier contract, rejects invalid claims, stores used nullifiers, and updates donor-facing aggregate state.
 
-The hackathon demo shows Alice as an eligible recipient, Alice's duplicate claim being blocked, and Mallory being rejected because she is not in the eligibility tree. It also includes a donor dashboard and a technical debug page for synthetic fixture inspection.
+ZK is used where privacy matters most: proving eligibility and compliance without publishing the private witness. Donors still get a live dashboard with budget, claimed amount, remaining escrow, roots, verifier mode, and transaction state.
 
 ## Technical description
 
-Lumen has four core technical layers:
+- Circom/Groth16 claim circuit with browser proof generation through a web worker.
+- Browser local verification runs before relayer submission.
+- The circuit uses 10 public inputs and 17 private witness fields.
+- Public inputs include `eligibility_root`, `compliance_root`, `payout_account_hash`, `nullifier_hash`, amount, cap, commitments, campaign ID, and policy hash.
+- Private witness fields include recipient secret, identity hash, salts, and fixed-depth Merkle paths/indices for the eligibility and compliance trees.
+- `nullifier_hash` prevents duplicate claims without revealing recipient identity.
+- `payout_account_hash` binds the Stellar payout recipient to the proof so swapped payout attempts fail.
+- The relayer receives only proof/public inputs plus the payout recipient needed for submission; it does not receive recipient secrets, Merkle paths, or private input JSON.
+- Soroban `real_groth16` verifier validates the current `claim_v0` proof path on Stellar testnet.
+- The campaign contract checks roots, policy, amount cap, budget, duplicate nullifier status, verifier result, and payout binding before transferring AIDUSD.
+- AIDUSD is held in SAC escrow and transferred on accepted testnet claims.
+- The donor dashboard reads live campaign state.
+- The auditor page shows a demo selective disclosure package for Dora, with commitments and bounded disclosure fields.
 
-- **Soroban campaign contract**: stores campaign config, budget, per-recipient cap, eligibility root, policy hash, verifier address, nullifiers, and aggregate stats. It validates root, policy hash, amount cap, remaining budget, duplicate nullifier status, and verifier result before accepting a claim.
-- **Eligibility Merkle tree**: the operator commits to eligible recipients with a public Merkle root. The private recipient witness contains the secret, identity hash, salts, Merkle path, and path indices.
-- **Nullifier-based double-claim prevention**: each claim derives `nullifier_hash = Poseidon(recipient_secret, campaign_id)`. The campaign stores used nullifiers only after verifier success, preventing repeat claims without revealing identity.
-- **ZK proof generation and verification**: the `claim.circom` circuit proves Merkle membership, nullifier derivation, amount cap compliance, amount commitment, and recipient commitment. The real local path uses Circom and snarkjs Groth16. The Soroban verifier contract performs BN254 Groth16 verification by default for the current development verification key.
+Validated flow:
 
-Verifier status is intentionally explicit:
-
-- Real local ZK proof: Circom/snarkjs Groth16 proof generation and local verification.
-- Real on-chain verification: Soroban Groth16 verifier in contract tests and deployed testnet smoke path.
-- Dev-only on-chain verifier: browser/local simulator envelope and explicit dev feature path. This is not production ZK.
-
-The donor aggregate dashboard reads campaign stats and recent events, showing accountability without exposing a public recipient list.
+```txt
+browser Groth16 proof
+-> eligibility + compliance clearance proof
+-> payout-bound recipient
+-> browser local verification
+-> relayed testnet submission
+-> Soroban verifier/campaign
+-> AIDUSD/SAC escrow transfer
+-> duplicate/non-compliant/ineligible/swapped-payout rejection
+-> donor live dashboard
+-> auditor selective disclosure package
+```
 
 ## What is working
 
-- Next.js demo app with landing, operator, recipient, donor, and debug pages.
-- Premium dark demo UI focused on judge clarity.
-- Deterministic demo campaign fixtures.
-- Eligibility Merkle tree generation.
-- Poseidon leaf, nullifier, amount commitment, and recipient commitment helpers.
-- Recipient flow for Alice accepted once.
-- Duplicate nullifier rejection for Alice's second claim.
-- Mallory invalid-recipient rejection.
-- Donor dashboard with aggregate accountability metrics.
-- Technical debug page with synthetic private witness inspection warning.
-- Circom claim circuit.
-- Real local Groth16 proof generation with snarkjs.
-- Real local Groth16 verification with snarkjs.
-- Negative local verifier cases for Mallory, over-cap amount, tampered public input, tampered proof, wrong campaign ID, and wrong policy hash.
-- Soroban campaign contract tests.
-- Soroban Groth16 verifier contract by default.
-- Stellar testnet deployment metadata.
-- Testnet Alice claim smoke test.
-- Testnet duplicate nullifier smoke test.
+- Browser Groth16 proof generation for the demo recipient Dora.
+- Browser local proof verification before submission.
+- Eligibility and compliance Merkle membership proof.
+- Proof-bound payout recipient through `payout_account_hash`.
+- Relayed Stellar testnet submission using proof/public inputs only.
+- Soroban verifier/campaign flow with `real_groth16` verifier mode.
+- AIDUSD/SAC escrow payout on accepted testnet claims.
+- Duplicate Dora rejection with no second transfer.
+- Eve non-compliant rejection before submission.
+- Mallory ineligible rejection before submission.
+- Swapped payout rejection in validation/no-send checks.
+- Donor live dashboard refresh against testnet campaign state.
+- Auditor selective disclosure demo package.
+- Current judge demo campaign is pristine with `claim_count=0`, `total_claimed=0`, and `remaining_budget=1000`.
 
-## What is real ZK
+## What is demo/testnet only
 
-- `circuits/claim/claim.circom` models the claim constraints.
-- `pnpm zk:build` compiles the circuit and builds deterministic development Groth16 artifacts.
-- `pnpm zk:prove:demo` generates Alice's witness and Groth16 proof with snarkjs.
-- `pnpm zk:verify:local` verifies Alice and rejects invalid/tampered cases.
-- `contracts/verifier` performs BN254 Groth16 verification by default for the current `claim_v0` development verification key.
-- `pnpm contracts:test` verifies valid Alice proof acceptance and invalid/tampered proof rejection through contract tests.
-- `pnpm stellar:claim:alice:testnet` runs the deployed testnet verifier smoke path before/with claim submission.
+- Deterministic development trusted setup and verification key.
+- Demo eligibility and compliance roots.
+- Local testnet relayer.
+- Testnet AIDUSD issued for the demo.
+- No production audit.
+- No mainnet deployment or mainnet support.
+- No real KYC/sanctions provider integration.
+- Public amounts and public payout addresses.
+- Auditor package is demo-only and is not production view-key infrastructure.
 
-## What is demo-only
-
-- The browser recipient flow uses a local Soroban-shaped simulator.
-- The browser proof payload uses an explicit `dev_verifier` envelope, not a production Groth16 browser prover.
-- `pnpm zk:build:dev` is an explicit dev-only artifact path and may skip Circom.
-- `contracts/verifier --features dev_verifier` accepts deterministic test-only bytes; default builds do not enable this.
-- Demo recipients and campaign data are deterministic fixtures.
-- Private witness values are visible only on the debug page or when the UI demo reveal toggle is used.
-- Browser-submitted testnet claims are not wired yet.
-- Trusted setup is deterministic development setup, not a production ceremony.
-
-## Built with
-
-- Stellar testnet.
-- Soroban smart contracts.
-- Rust 2021.
-- `soroban-sdk 27.0.0-rc.1`.
-- Circom claim circuit, `pragma circom 2.1.6`.
-- Project-local Circom compiler install from tag `v2.2.3`.
-- `snarkjs 0.7.6`.
-- `circomlib 2.0.5`.
-- TypeScript `5.8.3`.
-- Next.js `16.2.9`.
-- React `19.2.7`.
-- Tailwind CSS `4.3.2`.
-- `poseidon-lite 0.3.0`.
-- Vitest.
-- pnpm `11.7.0`.
-
-## Repository structure
-
-```txt
-apps/web              Next.js demo UI
-contracts/campaign    Soroban campaign contract
-contracts/verifier    Soroban Groth16 verifier and explicit dev feature
-contracts/mock_token  Demo token helper
-circuits/claim        Circom claim circuit and proof scripts
-packages/shared       Types and deterministic demo fixtures
-packages/merkle       Poseidon Merkle/nullifier/commitment helpers
-packages/prover       Dev envelope adapter and local witness checks
-packages/stellar      Local/testnet campaign client helpers
-scripts               ZK, E2E, and Stellar scripts
-docs                  Submission docs and technical notes
-deployments           Public testnet deployment evidence
-```
-
-## How to run
+## Commands for judges
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
+pnpm web:zk:prepare
+pnpm stellar:aidusd:active:testnet
+pnpm judge:validate:testnet
+pnpm judge:prepare-demo:testnet
 pnpm dev
 ```
 
-Open:
+`pnpm judge:validate:testnet` creates and consumes a separate validation campaign. Run `pnpm judge:prepare-demo:testnet` after it to recreate a pristine Dora demo campaign before recording or presenting.
 
-```txt
-http://localhost:3000
-```
+## Current pristine demo deployment
 
-Reproduce the ZK proof path:
+| Field | Value |
+| --- | --- |
+| Network | `testnet` |
+| Demo URL | `http://localhost:3000/demo` |
+| Campaign contract | `CCS7WTPLZI36VSQU2T3EKJRNJKGBYMRKNAVAFMSTPL2CJWCMNG2HJSZH` |
+| Verifier contract | `CDK6HSLEZRVIHLLQSEH6LQGXBHYNPL7VXO3W4QN4WVB4C4R5A466SYQZ` |
+| AIDUSD SAC | `CBRLWLJH3X2JPIB5UEUXHXDE6KKEZ3MCCVAT6STRAKP2SM52VR5DQTLQ` |
+| Asset issuer | `GDOY2OM6324SAIHXFGTNHYJMKMA25RTTVW2OGIDXO7DMRNVLKPBYB5ZM` |
+| Campaign ID | `0x00405cc1adafb8ac4ea9b6a8f390d2a2f9565304765480dd4da3c3ff33bce37c` |
+| Eligibility root | `0x2b070984377730cd19cb263f65a7ace043bd63cb3e45fa474017e9b52b08fd7e` |
+| Compliance root | `0x0a2138537cf03c3f72667f1a3436b6599b77363f681e4e44df5cb7f11fca665e` |
+| Policy hash | `0x1f0f1c8d9e2215a08b69345882c8850b778b85f0346f02c7c2a610f51d41aa21` |
+| Verifier mode | `real_groth16` |
+| Verification key hash | `0xf3be0265175696a6ecc1530ad5789f1ac0e0e899dee49ff066a049545db64e92` |
+| Escrow funded | `1000` AIDUSD |
+| Current pristine state | `claim_count=0`, `total_claimed=0`, `remaining_budget=1000` |
 
-```bash
-pnpm zk:doctor
-pnpm zk:setup
-pnpm zk:clean
-pnpm zk:build
-pnpm zk:prove:demo
-pnpm zk:verify:local
-```
+## Demo walkthrough
 
-Run the deterministic CLI demo:
+1. Open `/demo`.
+2. Open the Donor dashboard and confirm the pristine campaign state.
+3. Open Recipient and run the Dora claim.
+4. Try duplicate Dora and show rejection.
+5. Select Eve and show non-compliant rejection before submission.
+6. Select Mallory and show ineligible rejection before submission.
+7. Refresh the Donor dashboard and show updated live campaign totals.
+8. Open Auditor disclosure and show the demo selective disclosure package.
 
-```bash
-pnpm demo:e2e
-```
+## Must not claim
 
-Run tests and builds:
-
-```bash
-pnpm test
-pnpm contracts:test
-pnpm build
-```
-
-Run testnet smoke commands with a funded Stellar CLI source account:
-
-```bash
-pnpm stellar:doctor
-pnpm contracts:build
-pnpm stellar:deploy:testnet
-pnpm stellar:init-campaign:testnet
-pnpm stellar:claim:alice:testnet
-pnpm stellar:claim:alice-duplicate:testnet
-```
-
-Current public testnet IDs:
-
-```txt
-verifier   = CCHDSG4NLE4IWNGXOR46OYQRAW7KA4VQQB7NF4BTRH3D4HJIRBDLRR7D
-campaign   = CCICXWSMCEY47JF2OWQ3OQMZEHVC5URNCWELWHQ2YRJEI2ETWKUAXCWI
-mock token = CDCH6ECKA3EHYT7KO3ZXE275W2YCO7PAHRX4G2KGXNIZLFID5HFAFFC7
-```
-
-## Demo video script
-
-**0:00-0:20 - Problem**
-
-Public blockchains are transparent, but humanitarian recipients need privacy. Lumen keeps recipient eligibility private while preserving donor accountability.
-
-**0:20-0:45 - Architecture**
-
-Show the landing page diagram: Operator -> Eligibility root -> Recipient ZK proof -> Soroban campaign contract -> Donor dashboard. Explain that the chain sees commitments, nullifiers, proof bytes, and aggregate stats, not a recipient list.
-
-**0:45-1:25 - Recipient claim**
-
-Open the recipient page. Select Alice, generate the proof, show local verification status, and submit the claim. Alice is accepted once. Point out the private panel is hidden by default and the public panel contains campaign ID, root, policy hash, nullifier hash, amount, and proof.
-
-**1:25-1:45 - Abuse prevention**
-
-Click Try duplicate for Alice. The same nullifier is blocked. Select Mallory and generate/submit the claim. Mallory is rejected because she is not in the eligibility tree.
-
-**1:45-2:15 - Donor accountability**
-
-Open the donor dashboard. Show total budget, distributed amount, remaining amount, successful claims, duplicate claims blocked, invalid claims blocked, privacy status, and verifier status.
-
-**2:15-2:45 - Technical honesty**
-
-Open the debug page and show the warning: "Demo debug mode. Do not use with real recipient data." State the verifier boundary: real local Groth16 proof and deployed testnet verifier smoke path are working; browser-submitted testnet claims are not wired yet and the browser demo uses the dev-only verifier envelope.
-
-## Future roadmap
-
-- Replace deterministic development Groth16 setup with a production trusted setup ceremony.
-- Generate and manage production verification keys.
-- Move proving into a browser worker with artifact caching.
-- Wire browser-submitted testnet claims through wallet/RPC integration.
-- Add confidential amount support.
-- Add auditor view keys and donor reporting exports.
-- Integrate NGO/KYC provider workflows.
-- Add deny-list non-membership proofs.
-- Add Freighter/mobile wallet support.
-- Complete external cryptography and smart contract audits.
+- Do not claim production readiness.
+- Do not claim the system is audited.
+- Do not claim mainnet deployment or mainnet support.
+- Do not claim integration with a real KYC, sanctions, NGO, banking, or compliance provider.
+- Do not claim the trusted setup is production-grade.
+- Do not claim confidential amounts; amounts are public in this demo.
+- Do not claim payout addresses are private; payout addresses are public and proof-bound.
+- Do not claim the auditor package is production view-key infrastructure.
+- Do not claim direct Freighter signing; browser testnet submission uses a local relayer.
+- Do not claim all negative cases are submitted transactions; Eve and Mallory fail before submission, and swapped-payout validation is no-send/simulation unless separately stated.
+- Do not rerun state-changing validation against the pristine demo campaign unless intentionally preparing a fresh demo afterward.
