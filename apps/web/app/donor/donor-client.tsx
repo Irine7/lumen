@@ -3,17 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Database, MonitorCog, RefreshCw } from "lucide-react";
 import {
-  getCampaignConfig,
-  getCampaignEscrowBalance,
-  getCampaignStats,
-  getVerifierStatus,
-  type StellarReadResult,
-  type TestnetCampaignConfig,
-  type TestnetEscrowBalance,
-  type TestnetCampaignStats,
-  type TestnetVerifierStatus
-} from "@lumen-aid/stellar";
-import {
   Button,
   KeyValue,
   Metric,
@@ -24,25 +13,16 @@ import {
 } from "@/components/ui";
 import { useLumenDemo } from "@/lib/demo-runtime";
 import {
-  activeToStellarEnv,
-  fetchActiveTestnetConfig,
-  verifierModeLabel,
-  type ActiveTestnetConfigResult
-} from "@/lib/testnet-active";
+  fetchActiveTestnetState,
+  type ActiveTestnetState
+} from "@/lib/active-testnet-state";
 
 type DashboardMode = "testnet" | "demo";
 
 type TestnetReadState =
   | { status: "idle" }
   | { status: "loading" }
-  | {
-      status: "loaded";
-      active: ActiveTestnetConfigResult;
-      config: StellarReadResult<TestnetCampaignConfig> | null;
-      escrow: StellarReadResult<TestnetEscrowBalance> | null;
-      stats: StellarReadResult<TestnetCampaignStats> | null;
-      verifier: StellarReadResult<TestnetVerifierStatus> | null;
-    };
+  | { status: "loaded"; state: ActiveTestnetState };
 
 type LastTx = {
   txHash: string;
@@ -74,30 +54,36 @@ function readLastTx(): LastTx | null {
   }
 }
 
-function describeReadProblem(
-  result: StellarReadResult<unknown> | ActiveTestnetConfigResult | null
-): {
+function describeStateProblem(state: ActiveTestnetState | null): {
   tone: "amber" | "red";
   label: string;
   message: string;
 } | null {
-  if (!result || result.status === "ready") {
+  if (!state || state.mode === "live") {
     return null;
   }
 
-  if (result.status === "not_configured") {
+  if (state.mode === "metadata_only") {
     return {
       tone: "amber",
-      label: "Testnet not configured",
-      message: result.message
+      label: "Live stats unavailable",
+      message: state.error ?? "Active deployment metadata loaded, but live contract reads failed."
     };
   }
 
   return {
     tone: "red",
-    label: "Testnet read failed",
-    message: result.message
+    label: "Testnet state read failed",
+    message: state.error ?? state.computed.statusMessage
   };
+}
+
+function unavailable(state: ActiveTestnetState | null): string {
+  return state?.error ? `unavailable: ${state.error}` : "unavailable";
+}
+
+function metricValue(value: number | undefined, state: ActiveTestnetState | null): string {
+  return value === undefined ? unavailable(state) : value.toString();
 }
 
 export function DonorClient() {
@@ -108,42 +94,11 @@ export function DonorClient() {
 
   const refreshTestnet = useCallback(async (cancelled?: { value: boolean }) => {
     setTestnetState({ status: "loading" });
-    const active = await fetchActiveTestnetConfig();
+    const state = await fetchActiveTestnetState();
     if (cancelled?.value) {
       return;
     }
-
-    if (active.status !== "ready") {
-      setTestnetState({
-        status: "loaded",
-        active,
-        config: null,
-        escrow: null,
-        stats: null,
-        verifier: null
-      });
-      return;
-    }
-
-    const env = activeToStellarEnv(active.active);
-    const [config, escrow, testnetStats, verifier] = await Promise.all([
-      getCampaignConfig(env),
-      getCampaignEscrowBalance(env),
-      getCampaignStats(env),
-      getVerifierStatus(env)
-    ]);
-    if (cancelled?.value) {
-      return;
-    }
-
-    setTestnetState({
-      status: "loaded",
-      active,
-      config,
-      escrow,
-      stats: testnetStats,
-      verifier
-    });
+    setTestnetState({ status: "loaded", state });
   }, []);
 
   useEffect(() => {
@@ -160,14 +115,31 @@ export function DonorClient() {
       if (!cancelled.value) {
         setTestnetState({
           status: "loaded",
-          active: {
-            status: "error",
-            message: error instanceof Error ? error.message : String(error)
+          state: {
+            ok: false,
+            mode: "error",
+            error: error instanceof Error ? error.message : String(error),
+            deployment: {
+              assetMode: "",
+              assetCode: "",
+              assetContractId: "",
+              campaignContractId: "",
+              verifierContractId: "",
+              campaignId: "",
+              eligibilityRoot: "",
+              complianceRoot: "",
+              policyHash: "",
+              verificationKeyHash: "",
+              budget: "",
+              escrowFunded: "",
+              perRecipientCap: ""
+            },
+            computed: {
+              campaignState: "unread",
+              readyForFullDemo: false,
+              statusMessage: error instanceof Error ? error.message : String(error)
+            }
           },
-          config: null,
-          escrow: null,
-          stats: null,
-          verifier: null
         });
       }
     });
@@ -193,36 +165,14 @@ export function DonorClient() {
     };
   }, [mode, refreshTestnet]);
 
-  const active = testnetState.status === "loaded" && testnetState.active.status === "ready"
-    ? testnetState.active.active
-    : null;
-  const testnetConfig =
-    testnetState.status === "loaded" && testnetState.config?.status === "ready"
-      ? testnetState.config.data
-      : null;
-  const testnetStats =
-    testnetState.status === "loaded" && testnetState.stats?.status === "ready"
-      ? testnetState.stats.data
-      : null;
-  const testnetEscrow =
-    testnetState.status === "loaded" && testnetState.escrow?.status === "ready"
-      ? testnetState.escrow.data
-      : null;
-  const testnetVerifier =
-    testnetState.status === "loaded" && testnetState.verifier?.status === "ready"
-      ? testnetState.verifier.data
-      : null;
+  const state = testnetState.status === "loaded" ? testnetState.state : null;
+  const active = state?.ok ? state.deployment : null;
+  const live = state?.mode === "live" ? state.live : undefined;
   const testnetProblem = useMemo(() => {
     if (testnetState.status !== "loaded") {
       return null;
     }
-    return (
-      describeReadProblem(testnetState.active) ??
-      describeReadProblem(testnetState.config) ??
-      describeReadProblem(testnetState.escrow) ??
-      describeReadProblem(testnetState.stats) ??
-      describeReadProblem(testnetState.verifier)
-    );
+    return describeStateProblem(testnetState.state);
   }, [testnetState]);
 
   return (
@@ -281,6 +231,24 @@ export function DonorClient() {
             </div>
           ) : null}
 
+          {mode === "testnet" && state ? (
+            <div className="rounded-lg border border-[#26313d] bg-[#10161d] p-4">
+              <StatusDot
+                tone={state.mode === "live" ? "green" : state.mode === "metadata_only" ? "amber" : "red"}
+                label={
+                  state.mode === "live"
+                    ? "Testnet state configured"
+                    : state.mode === "metadata_only"
+                      ? "Testnet metadata configured"
+                      : "Testnet state unavailable"
+                }
+              />
+              <p className="mt-3 text-sm leading-6 text-[#d8e7ec]">
+                {state.computed.statusMessage}
+              </p>
+            </div>
+          ) : null}
+
           {mode === "testnet" && testnetProblem ? (
             <div className="rounded-lg border border-[#26313d] bg-[#10161d] p-4">
               <StatusDot tone={testnetProblem.tone} label={testnetProblem.label} />
@@ -292,39 +260,39 @@ export function DonorClient() {
 
           {mode === "testnet" && active ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <Metric label="Configured budget" value={testnetConfig?.budget ?? active.budget} tone="cyan" />
-              <Metric label={`${active.assetCode ?? "Testnet asset"} escrow funded`} value={active.escrowFunded ?? "unread"} tone="green" />
+              <Metric label="Configured budget" value={active.budget} tone="cyan" />
+              <Metric label={`${active.assetCode} escrow funded`} value={active.escrowFunded} tone="green" />
               <Metric
                 label="Total distributed"
-                value={testnetStats?.totalClaimed ?? "unread"}
+                value={metricValue(live?.totalClaimed, state)}
                 tone="green"
                 data-testid="donor-total-distributed"
               />
               <Metric
                 label="Remaining budget"
-                value={testnetStats?.remainingBudget ?? "unread"}
+                value={metricValue(live?.remainingBudget, state)}
               />
               <Metric
-                label="Actual token balance"
-                value={testnetEscrow?.balance ?? "unread"}
+                label="Actual token / escrow balance"
+                value={metricValue(live?.actualTokenBalance ?? live?.escrowBalance, state)}
                 data-testid="donor-escrow-balance"
               />
               <Metric
                 label="Claim count"
-                value={testnetStats?.claimCount.toString() ?? "unread"}
+                value={metricValue(live?.claimCount, state)}
                 tone="green"
               />
               <Metric
                 label="Duplicates blocked"
-                value={testnetStats?.duplicateClaimsBlocked.toString() ?? "unread"}
+                value={metricValue(live?.duplicateClaimsBlocked, state)}
                 tone="amber"
               />
               <Metric
                 label="Non-compliant/ineligible attempts blocked"
-                value={testnetStats?.invalidClaimsBlocked.toString() ?? "unread"}
+                value={metricValue(live?.invalidClaimsBlocked, state)}
                 tone="red"
               />
-              <Metric label="Audit commitment" value="available" tone="cyan" />
+              <Metric label="Verifier mode" value={live?.verifierMode ?? unavailable(state)} tone="cyan" />
             </div>
           ) : null}
 
@@ -348,15 +316,13 @@ export function DonorClient() {
             {mode === "testnet" && active ? (
               <>
                 <StatusDot
-                  tone={testnetVerifier?.mode === "real_groth16" ? "green" : "amber"}
-                  label={
-                    testnetVerifier
-                      ? `Verifier mode: ${testnetVerifier.mode}`
-                      : verifierModeLabel(active)
-                  }
+                  tone={live?.verifierMode === "real_groth16" ? "green" : "amber"}
+                  label={`Verifier mode: ${live?.verifierMode ?? unavailable(state)}`}
                 />
                 <p className="mt-3 text-sm leading-6 text-[#d8e7ec]">
-                  {testnetVerifier?.notes ?? verifierModeLabel(active)}
+                  {state?.error
+                    ? `Verifier live read note: ${state.error}`
+                    : "Verifier status comes from the shared read-only testnet state endpoint."}
                 </p>
               </>
             ) : (
@@ -398,34 +364,17 @@ export function DonorClient() {
               <>
                 <KeyValue label="Campaign contract ID" value={active.campaignContractId} />
                 <KeyValue label="Verifier contract ID" value={active.verifierContractId} />
-                <KeyValue label="Asset code" value={active.assetCode ?? "testnet asset"} />
-                <KeyValue
-                  label="Asset contract ID"
-                  value={active.assetContractId ?? active.mockTokenContractId ?? "not configured"}
-                />
-                <KeyValue label="Campaign ID" value={testnetConfig?.campaignId ?? active.campaignId} />
-                <KeyValue
-                  label="Eligibility root"
-                  value={testnetConfig?.eligibilityRoot ?? active.eligibilityRoot}
-                />
-                <KeyValue
-                  label="Compliance root"
-                  value={testnetConfig?.complianceRoot ?? active.complianceRoot}
-                />
-                <KeyValue label="Policy hash" value={testnetConfig?.policyHash ?? active.policyHash} />
-                <KeyValue label="Budget" value={testnetConfig?.budget ?? active.budget} />
-                <KeyValue label="Escrow funded" value={active.escrowFunded ?? "unread"} />
-                <KeyValue label="Actual token balance" value={testnetEscrow?.balance ?? "unread"} />
-                <KeyValue label="Per-recipient cap" value={testnetConfig?.perRecipientCap ?? active.perRecipientCap} />
-                <KeyValue
-                  label="Verifier key hash"
-                  value={
-                    testnetVerifier?.verificationKeyHash ??
-                    (active.verifierInfo.mode === "legacy_not_introspectable"
-                      ? "legacy verifier, mode not introspectable"
-                      : active.verifierInfo.verificationKeyHash)
-                  }
-                />
+                <KeyValue label="Asset code" value={active.assetCode} />
+                <KeyValue label="Asset contract ID" value={active.assetContractId} />
+                <KeyValue label="Campaign ID" value={active.campaignId} />
+                <KeyValue label="Eligibility root" value={active.eligibilityRoot} />
+                <KeyValue label="Compliance root" value={active.complianceRoot} />
+                <KeyValue label="Policy hash" value={active.policyHash} />
+                <KeyValue label="Budget" value={active.budget} />
+                <KeyValue label="Escrow funded" value={active.escrowFunded} />
+                <KeyValue label="Actual token / escrow balance" value={metricValue(live?.actualTokenBalance ?? live?.escrowBalance, state)} />
+                <KeyValue label="Per-recipient cap" value={active.perRecipientCap} />
+                <KeyValue label="Verifier key hash" value={active.verificationKeyHash} />
               </>
             ) : (
               <>
@@ -457,6 +406,7 @@ export function DonorClient() {
                   label={testnetProblem ? testnetProblem.label : active ? "Active testnet read ready" : "Waiting"}
                 />
                 <dl className="mt-4">
+                  <KeyValue label="Read mode" value={state?.mode ?? "not loaded"} />
                   <KeyValue label="Recipient identity" value="hidden by ZK proof" />
                   <KeyValue label="Compliance clearance" value="hidden by ZK proof" />
                   <KeyValue label="Payout address" value="public Stellar address" />

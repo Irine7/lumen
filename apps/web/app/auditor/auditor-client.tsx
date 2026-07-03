@@ -23,10 +23,34 @@ type AuditPackage = {
     payoutAddress?: string;
   };
   demoOnly?: boolean;
+  previewOnly?: boolean;
   createdAt?: string;
 };
 
 const STORAGE_KEY = "lumen-demo-audit-package";
+const NO_PACKAGE = "No package loaded";
+const DEMO_PREVIEW_PACKAGE: AuditPackage = {
+  campaignId: "preview-demo-package",
+  claimTxHash: "preview-no-claim-submitted",
+  nullifierHash: "preview-generated-after-claim",
+  amount: "100",
+  asset: "AIDUSD",
+  payoutAccountHash: "preview-generated-after-proof",
+  eligibilityRoot: "preview-active-eligibility-root",
+  complianceRoot: "preview-active-compliance-root",
+  policyHash: "preview-active-policy-hash",
+  auditCommitment: "preview-audit-commitment",
+  proofVerified: false,
+  recipientDisclosure: {
+    demoRecipientName: "Dora",
+    eligibilityReason: "Food and essentials emergency grant",
+    complianceStatus: "cleared",
+    payoutAddress: "preview-payout-address"
+  },
+  demoOnly: true,
+  previewOnly: true,
+  createdAt: "preview"
+};
 
 function parsePackage(value: string): AuditPackage | null {
   try {
@@ -48,7 +72,10 @@ export function AuditorClient() {
   function loadStoredPackage() {
     const stored = window.localStorage.getItem(STORAGE_KEY);
     if (!stored) {
-      setError("No local demo disclosure package has been generated in this browser.");
+      const preview = JSON.stringify(DEMO_PREVIEW_PACKAGE, null, 2);
+      setRawPackage(preview);
+      setAuditPackage(DEMO_PREVIEW_PACKAGE);
+      setError(null);
       return;
     }
     setRawPackage(stored);
@@ -70,6 +97,24 @@ export function AuditorClient() {
       setAuditPackage(parsePackage(stored));
     }
   }, []);
+
+  const packageType = auditPackage
+    ? auditPackage.previewOnly
+      ? "preview demo package"
+      : "real claim package from this browser"
+    : "missing";
+  const packageValue = (
+    value: string | boolean | undefined | null,
+    missing = "missing"
+  ): string => {
+    if (!auditPackage) {
+      return NO_PACKAGE;
+    }
+    if (typeof value === "boolean") {
+      return String(value);
+    }
+    return value ?? missing;
+  };
 
   return (
     <div className="grid gap-6">
@@ -100,11 +145,23 @@ export function AuditorClient() {
                   : "Demo-only selective disclosure. Not production view keys."
               }
             />
+            {!auditPackage ? (
+              <p className="mt-3 text-sm leading-6 text-[#ffe4a3]">
+                No disclosure package loaded yet. After a successful Dora claim, click "Load local package" to inspect the demo-only auditor disclosure.
+              </p>
+            ) : null}
+            <dl className="mt-4">
+              <KeyValue label="Package" value={auditPackage ? "present" : "missing"} />
+              <KeyValue label="Package type" value={packageType} />
+              <KeyValue label="Audit commitment" value={auditPackage?.auditCommitment ? "present" : auditPackage ? "missing" : "missing"} />
+              <KeyValue label="Proof verified" value={auditPackage ? String(auditPackage.proofVerified) : "false"} />
+            </dl>
           </div>
           <textarea
             value={rawPackage}
             onChange={(event) => setRawPackage(event.target.value)}
             className="min-h-40 rounded-lg border border-[#2b3845] bg-[#080b0f] p-3 font-mono text-xs leading-5 text-white outline-none focus:border-[#51d6ff]"
+            placeholder="Paste a demo disclosure package JSON here, or use Load local package. If no claim package exists in this browser, Load local package opens a clearly labeled preview package."
             spellCheck={false}
           />
           {error ? (
@@ -123,16 +180,16 @@ export function AuditorClient() {
             action={<LockKeyhole className="h-5 w-5 text-[#51d6ff]" />}
           />
           <dl className="p-5">
-            <KeyValue label="Campaign ID" value={auditPackage?.campaignId ?? "load package"} />
-            <KeyValue label="Claim tx" value={auditPackage?.claimTxHash ?? "load package"} />
-            <KeyValue label="Nullifier hash" value={auditPackage?.nullifierHash ?? "load package"} />
-            <KeyValue label="Amount" value={auditPackage ? `${auditPackage.amount} ${auditPackage.asset}` : "load package"} />
-            <KeyValue label="Payout account hash" value={auditPackage?.payoutAccountHash ?? "load package"} />
-            <KeyValue label="Eligibility root" value={auditPackage?.eligibilityRoot ?? "load package"} />
-            <KeyValue label="Compliance root" value={auditPackage?.complianceRoot ?? "load package"} />
-            <KeyValue label="Policy hash" value={auditPackage?.policyHash ?? "load package"} />
-            <KeyValue label="Audit commitment" value={auditPackage?.auditCommitment ?? "not included"} />
-            <KeyValue label="Proof verified" value={auditPackage ? String(auditPackage.proofVerified) : "load package"} />
+            <KeyValue label="Campaign ID" value={packageValue(auditPackage?.campaignId)} />
+            <KeyValue label="Claim tx" value={packageValue(auditPackage?.claimTxHash)} />
+            <KeyValue label="Nullifier hash" value={packageValue(auditPackage?.nullifierHash)} />
+            <KeyValue label="Amount" value={auditPackage ? `${auditPackage.amount} ${auditPackage.asset}` : NO_PACKAGE} />
+            <KeyValue label="Payout account hash" value={packageValue(auditPackage?.payoutAccountHash)} />
+            <KeyValue label="Eligibility root" value={packageValue(auditPackage?.eligibilityRoot)} />
+            <KeyValue label="Compliance root" value={packageValue(auditPackage?.complianceRoot)} />
+            <KeyValue label="Policy hash" value={packageValue(auditPackage?.policyHash)} />
+            <KeyValue label="Audit commitment" value={packageValue(auditPackage?.auditCommitment)} />
+            <KeyValue label="Proof verified" value={auditPackage ? String(auditPackage.proofVerified) : NO_PACKAGE} />
           </dl>
         </Panel>
 
@@ -145,22 +202,23 @@ export function AuditorClient() {
           <dl className="p-5">
             <KeyValue
               label="Demo recipient"
-              value={auditPackage?.recipientDisclosure?.demoRecipientName ?? "not disclosed"}
+              value={packageValue(auditPackage?.recipientDisclosure?.demoRecipientName, "not disclosed")}
             />
             <KeyValue
               label="Eligibility reason"
-              value={auditPackage?.recipientDisclosure?.eligibilityReason ?? "not disclosed"}
+              value={packageValue(auditPackage?.recipientDisclosure?.eligibilityReason, "not disclosed")}
             />
             <KeyValue
               label="Compliance status"
-              value={auditPackage?.recipientDisclosure?.complianceStatus ?? "not disclosed"}
+              value={packageValue(auditPackage?.recipientDisclosure?.complianceStatus, "not disclosed")}
             />
             <KeyValue
               label="Payout address"
-              value={auditPackage?.recipientDisclosure?.payoutAddress ?? "not disclosed"}
+              value={packageValue(auditPackage?.recipientDisclosure?.payoutAddress, "not disclosed")}
             />
-            <KeyValue label="Proof verified" value={auditPackage ? String(auditPackage.proofVerified) : "load package"} />
-            <KeyValue label="Demo-only package" value={auditPackage ? String(Boolean(auditPackage.demoOnly)) : "load package"} />
+            <KeyValue label="Proof verified" value={auditPackage ? String(auditPackage.proofVerified) : NO_PACKAGE} />
+            <KeyValue label="Demo-only package" value={auditPackage ? String(Boolean(auditPackage.demoOnly)) : NO_PACKAGE} />
+            <KeyValue label="Preview package" value={auditPackage ? String(Boolean(auditPackage.previewOnly)) : NO_PACKAGE} />
           </dl>
         </Panel>
       </div>
