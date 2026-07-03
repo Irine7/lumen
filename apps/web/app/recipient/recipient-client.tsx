@@ -14,7 +14,7 @@ import {
   XCircle
 } from "lucide-react";
 import type { ClaimProofResult, ClaimUiStatus, DemoRecipient } from "@lumen-aid/shared";
-import type { SubmitClaimResult } from "@lumen-aid/stellar";
+import { derivePayoutAccountHash, type SubmitClaimResult } from "@lumen-aid/stellar";
 import { verifyClaimProofLocally } from "@lumen-aid/prover";
 import {
   Button,
@@ -44,6 +44,14 @@ type TestnetClaimResult = {
   status: string;
   message: string;
   txHash?: string | null;
+  payoutAmount?: number;
+  payoutRecipient?: string;
+  assetCode?: string;
+  assetContractId?: string | null;
+  recipientBalanceBefore?: string | null;
+  recipientBalanceAfter?: string | null;
+  campaignEscrowBefore?: string | null;
+  campaignEscrowAfter?: string | null;
   readableResult?: string;
   stats?: {
     total_claimed?: string;
@@ -60,6 +68,7 @@ type TestnetClaimResult = {
 };
 
 const LAST_TX_STORAGE_KEY = "lumen-last-testnet-tx";
+const LAST_AUDIT_PACKAGE_STORAGE_KEY = "lumen-demo-audit-package";
 
 export function RecipientClient() {
   const [mode, setMode] = useState<RecipientMode>("real");
@@ -74,6 +83,7 @@ export function RecipientClient() {
             <div className="flex flex-wrap gap-2" role="group" aria-label="Claim mode">
               <Button
                 type="button"
+                data-testid="recipient-real-testnet-mode"
                 variant={mode === "real" ? "primary" : "secondary"}
                 onClick={() => setMode("real")}
               >
@@ -112,7 +122,7 @@ function RealTestnetClaim() {
     status: "not_configured",
     message: "Loading active testnet deployment"
   });
-  const [selectedId, setSelectedId] = useState<DemoRecipient["id"]>("alice");
+  const [selectedId, setSelectedId] = useState<DemoRecipient["id"]>("dora");
   const selected = useMemo(
     () =>
       activeTestnetRecipients.find((recipient) => recipient.id === selectedId) ??
@@ -124,6 +134,8 @@ function RealTestnetClaim() {
   const [proofResult, setProofResult] = useState<BrowserClaimProofResult | null>(null);
   const [claimResult, setClaimResult] = useState<TestnetClaimResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [payoutAddress, setPayoutAddress] = useState("");
+  const [payoutSource, setPayoutSource] = useState<"demo" | "freighter" | "manual">("demo");
 
   useEffect(() => {
     let cancelled = false;
@@ -149,6 +161,27 @@ function RealTestnetClaim() {
 
   const active = activeResult.status === "ready" ? activeResult.active : null;
   const campaign = useMemo(() => (active ? activeToCampaign(active) : null), [active]);
+  const activeRecipient = useMemo(
+    () => active?.recipients.find((recipient) => recipient.id === selectedId) ?? null,
+    [active, selectedId]
+  );
+  const demoPayoutAddress = activeRecipient?.payoutAddress ?? selected.payoutAddress ?? "";
+  const payoutAccountHash = useMemo(() => {
+    if (!payoutAddress) {
+      return null;
+    }
+    try {
+      return derivePayoutAccountHash(payoutAddress);
+    } catch {
+      return null;
+    }
+  }, [payoutAddress]);
+
+  useEffect(() => {
+    if (demoPayoutAddress && payoutSource === "demo") {
+      setPayoutAddress(demoPayoutAddress);
+    }
+  }, [demoPayoutAddress, payoutSource]);
 
   function resetClaimState(nextAmount = amount) {
     setAmount(nextAmount);
@@ -158,9 +191,54 @@ function RealTestnetClaim() {
     setError(null);
   }
 
+  async function connectFreighter() {
+    const freighter = (window as unknown as {
+      freighterApi?: {
+        getAddress?: () => Promise<string | { address?: string }>;
+        isConnected?: () => Promise<boolean>;
+      };
+    }).freighterApi;
+    if (!freighter?.getAddress) {
+      setError("Freighter is not available in this browser");
+      return;
+    }
+    const result = await freighter.getAddress();
+    const address = typeof result === "string" ? result : result.address;
+    if (!address) {
+      setError("Freighter did not return a public address");
+      return;
+    }
+    setPayoutSource("freighter");
+    setPayoutAddress(address);
+    resetClaimState();
+  }
+
+  function useDemoRecipientAddress() {
+    setPayoutSource("demo");
+    setPayoutAddress(demoPayoutAddress);
+    resetClaimState();
+  }
+
+  async function auditCommitment(input: BrowserClaimProofResult): Promise<string> {
+    const payload = [
+      input.publicInputs.campaignId,
+      input.publicInputs.nullifierHash,
+      input.publicInputs.amount,
+      input.publicInputs.payoutAccountHash,
+      input.publicInputs.policyHash,
+      input.publicInputs.complianceRoot
+    ].join("|");
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payload));
+    return `0x${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+  }
+
   async function handleGenerate() {
     if (!campaign || !active) {
       setError("Active testnet deployment is not loaded");
+      return;
+    }
+    if (!payoutAddress || !payoutAccountHash) {
+      setError("Choose a valid Stellar payout address before generating the proof");
       return;
     }
 
@@ -174,7 +252,9 @@ function RealTestnetClaim() {
           campaign,
           recipient: selected,
           recipients: activeTestnetRecipients,
-          amount
+          amount,
+          payoutAddress,
+          payoutAccountHash
         },
         setProofStatus
       );
@@ -186,18 +266,20 @@ function RealTestnetClaim() {
     }
   }
 
-  async function submitToTestnet() {
+  async function submitToTestnet(payoutRecipientOverride?: string) {
     if (!proofResult || !active) {
       return;
     }
 
     setError(null);
+    const submittedPayoutRecipient = payoutRecipientOverride ?? payoutAddress;
     const response = await fetch("/api/testnet/claim", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         proofEncodingForSoroban: proofResult.proofEncodingForSoroban,
         publicInputs: proofResult.publicInputs,
+        payoutRecipient: submittedPayoutRecipient,
         campaignContractId: active.campaignContractId,
         campaignId: active.campaignId
       })
@@ -205,16 +287,66 @@ function RealTestnetClaim() {
     const result = (await response.json()) as TestnetClaimResult;
     setClaimResult(result);
     if (result.ok && result.txHash) {
+      const commitment = await auditCommitment(proofResult);
       window.localStorage.setItem(
         LAST_TX_STORAGE_KEY,
         JSON.stringify({
           txHash: result.txHash,
           campaignContractId: active.campaignContractId,
+          payoutRecipient: result.payoutRecipient ?? payoutAddress,
+          payoutAmount: result.payoutAmount,
+          assetCode: result.assetCode,
+          recipientBalanceAfter: result.recipientBalanceAfter,
+          campaignEscrowAfter: result.campaignEscrowAfter,
           at: new Date().toISOString()
+        })
+      );
+      window.localStorage.setItem(
+        LAST_AUDIT_PACKAGE_STORAGE_KEY,
+        JSON.stringify({
+          campaignId: proofResult.publicInputs.campaignId,
+          claimTxHash: result.txHash,
+          nullifierHash: proofResult.publicInputs.nullifierHash,
+          amount: String(proofResult.publicInputs.amount),
+          asset: result.assetCode ?? active.assetCode ?? "testnet asset",
+          payoutAccountHash: proofResult.publicInputs.payoutAccountHash,
+          eligibilityRoot: proofResult.publicInputs.eligibilityRoot,
+          complianceRoot: proofResult.publicInputs.complianceRoot,
+          policyHash: proofResult.publicInputs.policyHash,
+          auditCommitment: commitment,
+          proofVerified: proofResult.localVerification,
+          recipientDisclosure: {
+            demoRecipientName: selected.displayName,
+            eligibilityReason: selected.eligibilityReason,
+            complianceStatus: selected.complianceStatus,
+            payoutAddress
+          },
+          demoOnly: true,
+          createdAt: new Date().toISOString()
         })
       );
       window.dispatchEvent(new Event("lumen-testnet-claim"));
     }
+  }
+
+  function chooseScenario(recipientId: DemoRecipient["id"]) {
+    const recipient =
+      activeTestnetRecipients.find((item) => item.id === recipientId) ??
+      activeTestnetRecipients[0]!;
+    setSelectedId(recipient.id);
+    setPayoutSource("demo");
+    resetClaimState(recipient.defaultClaimAmount);
+  }
+
+  function swappedPayoutAddress(): string | null {
+    if (!active) {
+      return null;
+    }
+    return (
+      active.recipients.find(
+        (recipient) => recipient.id !== selectedId && recipient.payoutAddress
+      )?.payoutAddress ?? null
+    );
   }
 
   const statusTone =
@@ -225,6 +357,34 @@ function RealTestnetClaim() {
         : proofStatus === "idle"
           ? "neutral"
           : "cyan";
+  const localVerificationLabel = proofResult
+    ? proofResult.localVerification
+      ? "real Groth16 accepted"
+      : "real Groth16 rejected"
+    : "generate proof first";
+  const submissionLabel = claimResult
+    ? claimResult.txHash
+      ? "submitted to testnet"
+      : "blocked before transfer"
+    : "not submitted";
+  const claimResultLabel = claimResult
+    ? claimResult.status.replaceAll("_", " ")
+    : error
+      ? "proof blocked"
+      : "not run";
+  const balanceDeltaLabel = claimResult?.campaignEscrowAfter
+    ? `${claimResult.campaignEscrowBefore ?? "?"} -> ${claimResult.campaignEscrowAfter}`
+    : "no balance delta yet";
+  const selectedScenario =
+    selectedId === "dora"
+      ? claimResult?.status === "duplicate_rejected"
+        ? "Duplicate claim: Dora again"
+        : "Valid recipient: Dora"
+      : selectedId === "eve"
+        ? "Non-compliant: Eve"
+        : selectedId === "mallory"
+          ? "Ineligible: Mallory"
+          : "Valid recipient";
 
   return (
     <div className="grid gap-6">
@@ -245,9 +405,62 @@ function RealTestnetClaim() {
           <div className="grid gap-4 md:grid-cols-4">
             <Metric label="Submission" value="Stellar testnet" tone="cyan" />
             <Metric label="Local proof verification" value="real Groth16" tone="green" />
-            <Metric label="Budget" value={`$${campaign.budget}`} />
-            <Metric label="Per-recipient cap" value={`$${campaign.perRecipientCap}`} />
+            <Metric label="Asset" value={active.assetCode ?? "testnet asset"} />
+            <Metric label="Escrow funded" value={active.escrowFunded ?? active.budget} />
           </div>
+
+          <Panel>
+            <PanelHeader
+              title="Guided scenario"
+              description="Use the same proof flow for the positive claim and the expected rejection cases."
+            />
+            <div className="grid gap-4 p-5 lg:grid-cols-[0.9fr_1.1fr]">
+              <div className="grid gap-3">
+                {[
+                  { label: "Valid recipient: Dora", action: () => chooseScenario("dora") },
+                  { label: "Duplicate claim: Dora again", action: () => submitToTestnet() },
+                  { label: "Non-compliant: Eve", action: () => chooseScenario("eve") },
+                  { label: "Ineligible: Mallory", action: () => chooseScenario("mallory") },
+                  { label: "Payout swap: blocked", action: () => {
+                    const swapped = swappedPayoutAddress();
+                    if (swapped) void submitToTestnet(swapped);
+                  } }
+                ].map((scenario) => (
+                  <Button
+                    key={scenario.label}
+                    type="button"
+                    variant={selectedScenario === scenario.label ? "primary" : "secondary"}
+                    disabled={
+                      scenario.label === "Duplicate claim: Dora again"
+                        ? !proofResult?.localVerification || claimResult?.status !== "claim_accepted"
+                        : scenario.label === "Payout swap: blocked"
+                          ? !proofResult?.localVerification || !swappedPayoutAddress()
+                          : false
+                    }
+                    onClick={scenario.action}
+                  >
+                    {scenario.label}
+                  </Button>
+                ))}
+              </div>
+              <div className="rounded-lg border border-[#26313d] bg-[#080b0f] p-4">
+                <StatusDot tone={statusTone} label={selectedScenario} />
+                <dl className="mt-4">
+                  <KeyValue label="Proof status" value={proofStatus} />
+                  <div data-testid="local-verification-status">
+                    <KeyValue label="Local verification status" value={localVerificationLabel} />
+                  </div>
+                  <KeyValue label="Testnet submission status" value={submissionLabel} />
+                  <KeyValue label="Claim result" value={claimResultLabel} />
+                  <KeyValue label="Balance/escrow delta" value={balanceDeltaLabel} />
+                  <KeyValue
+                    label="Privacy note"
+                    value="Private witness stays in browser; relayer receives only proof/public inputs; payout address is public and proof-bound."
+                  />
+                </dl>
+              </div>
+            </div>
+          </Panel>
 
           <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
             <Panel>
@@ -278,14 +491,18 @@ function RealTestnetClaim() {
                       >
                         <div className="flex items-center justify-between gap-3">
                           <span className="font-semibold text-white">{recipient.displayName}</span>
-                          {recipient.eligible ? (
+                          {recipient.eligible && recipient.compliant ? (
                             <UserCheck className="h-4 w-4 text-[#5df0a3]" />
                           ) : (
                             <XCircle className="h-4 w-4 text-[#ff6b6b]" />
                           )}
                         </div>
                         <p className="mt-2 text-xs leading-5 text-[#93a4ad]">
-                          {recipient.eligible ? "Eligible active testnet recipient" : "Ineligible test case"}
+                          {recipient.eligible && recipient.compliant
+                            ? "Demo fixture: eligible + compliant"
+                            : recipient.eligible
+                              ? "Demo fixture: eligible but not compliant"
+                              : "Demo fixture: not eligible"}
                         </p>
                       </button>
                     );
@@ -304,28 +521,84 @@ function RealTestnetClaim() {
                   />
                 </label>
 
+                <div className="rounded-lg border border-[#26313d] bg-[#080b0f] p-4">
+                  <div className="flex flex-wrap gap-3">
+                    <Button type="button" variant="secondary" onClick={connectFreighter}>
+                      Connect Freighter
+                    </Button>
+                    <Button type="button" variant="secondary" onClick={useDemoRecipientAddress}>
+                      Use demo recipient address
+                    </Button>
+                  </div>
+                  <label className="mt-4 grid gap-2 text-sm text-[#d8e7ec]">
+                    Payout address
+                    <input
+                      value={payoutAddress}
+                      onChange={(event) => {
+                        setPayoutSource("manual");
+                        setPayoutAddress(event.target.value);
+                        setProofResult(null);
+                        setClaimResult(null);
+                      }}
+                      className="h-11 rounded-lg border border-[#2b3845] bg-[#080b0f] px-3 font-mono text-xs text-white outline-none focus:border-[#51d6ff]"
+                    />
+                  </label>
+                  <dl className="mt-4">
+                    <KeyValue label="Eligibility" value="hidden, proven in ZK" />
+                    <KeyValue label="Compliance clearance" value="hidden, proven in ZK" />
+                    <KeyValue label="Fee payer" value="local testnet relayer" />
+                    <KeyValue label="Payout recipient source" value={payoutSource} />
+                    <KeyValue label="Proof bound to recipient" value={payoutAccountHash ? "yes" : "invalid address"} />
+                    <KeyValue label="payout_account_hash" value={payoutAccountHash ?? "choose payout address"} />
+                  </dl>
+                </div>
+
                 <div className="flex flex-wrap gap-3">
-                  <Button type="button" onClick={handleGenerate}>
+                  <Button type="button" data-testid="generate-proof-button" onClick={handleGenerate}>
                     <Play className="h-4 w-4" />
-                    Generate real browser ZK proof
+                    Generate proof bound to payout address
                   </Button>
                   <Button
                     type="button"
                     variant="secondary"
+                    data-testid="submit-claim-button"
                     disabled={!proofResult?.localVerification}
-                    onClick={submitToTestnet}
+                    onClick={() => submitToTestnet()}
                   >
                     <Send className="h-4 w-4" />
-                    Submit proof to Stellar testnet
+                    Submit payout claim to Stellar testnet
                   </Button>
                   <Button
                     type="button"
                     variant="secondary"
+                    data-testid="duplicate-claim-button"
                     disabled={!proofResult?.localVerification || claimResult?.status !== "claim_accepted"}
-                    onClick={submitToTestnet}
+                    onClick={() => submitToTestnet()}
                   >
                     <AlertTriangle className="h-4 w-4" />
-                    Try duplicate claim
+                    Try duplicate payout claim
+                  </Button>
+                  <Button type="button" variant="secondary" data-testid="eve-negative-button" onClick={() => chooseScenario("eve")}>
+                    <AlertTriangle className="h-4 w-4" />
+                    Try non-compliant recipient
+                  </Button>
+                  <Button type="button" variant="secondary" data-testid="mallory-negative-button" onClick={() => chooseScenario("mallory")}>
+                    <AlertTriangle className="h-4 w-4" />
+                    Try ineligible recipient
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={!proofResult?.localVerification || !swappedPayoutAddress()}
+                    onClick={() => {
+                      const swapped = swappedPayoutAddress();
+                      if (swapped) {
+                        void submitToTestnet(swapped);
+                      }
+                    }}
+                  >
+                    <AlertTriangle className="h-4 w-4" />
+                    Try swapped payout address
                   </Button>
                 </div>
 
@@ -345,6 +618,23 @@ function RealTestnetClaim() {
                       }
                     />
                     <KeyValue label="Tx hash" value={claimResult?.txHash ?? "submit proof first"} />
+                    <KeyValue label="Payout recipient" value={claimResult?.payoutRecipient ?? payoutAddress} />
+                    <KeyValue
+                      label="Recipient balance"
+                      value={
+                        claimResult?.recipientBalanceAfter
+                          ? `${claimResult.recipientBalanceBefore ?? "?"} -> ${claimResult.recipientBalanceAfter}`
+                          : "submit proof first"
+                      }
+                    />
+                    <KeyValue
+                      label="Escrow balance"
+                      value={
+                        claimResult?.campaignEscrowAfter
+                          ? `${claimResult.campaignEscrowBefore ?? "?"} -> ${claimResult.campaignEscrowAfter}`
+                          : "submit proof first"
+                      }
+                    />
                   </div>
                 </div>
 
@@ -373,10 +663,15 @@ function RealTestnetClaim() {
                     label="Eligibility root"
                     value={proofResult?.publicInputs.eligibilityRoot ?? active.eligibilityRoot}
                   />
+                  <KeyValue
+                    label="Compliance root"
+                    value={proofResult?.publicInputs.complianceRoot ?? active.complianceRoot}
+                  />
                   <KeyValue label="Policy hash" value={proofResult?.publicInputs.policyHash ?? active.policyHash} />
                   <KeyValue label="Nullifier hash" value={proofResult?.publicInputs.nullifierHash} />
                   <KeyValue label="Amount commitment" value={proofResult?.publicInputs.amountCommitment} />
                   <KeyValue label="Recipient commitment" value={proofResult?.publicInputs.recipientCommitment} />
+                  <KeyValue label="Payout account hash" value={proofResult?.publicInputs.payoutAccountHash} />
                 </dl>
                 {proofResult ? (
                   <CodeBlock
@@ -399,7 +694,7 @@ function RealTestnetClaim() {
 function TestnetClaimOutcome({ result }: { result: TestnetClaimResult }) {
   const accepted = result.ok && result.status === "claim_accepted";
   return (
-    <div className="rounded-lg border border-[#26313d] bg-[#10161d] p-4">
+    <div data-testid="claim-result-status" className="rounded-lg border border-[#26313d] bg-[#10161d] p-4">
       <StatusDot
         tone={accepted ? "green" : result.status.includes("duplicate") ? "amber" : "red"}
         label={result.status.replaceAll("_", " ")}
@@ -415,7 +710,11 @@ function TestnetClaimOutcome({ result }: { result: TestnetClaimResult }) {
 function LocalDemoClaim() {
   const { campaign, recipients, generateProof, submitProof, stats } = useLumenDemo();
   const visibleRecipients = useMemo(
-    () => recipients.filter((recipient) => recipient.id === "alice" || recipient.id === "mallory"),
+    () =>
+      recipients.filter(
+        (recipient) =>
+          recipient.id === "alice" || recipient.id === "eve" || recipient.id === "mallory"
+      ),
     [recipients]
   );
   const [selectedId, setSelectedId] = useState<DemoRecipient["id"]>("alice");
@@ -495,14 +794,18 @@ function LocalDemoClaim() {
               >
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-semibold text-white">{recipient.displayName}</span>
-                  {recipient.eligible ? (
+                  {recipient.eligible && recipient.compliant ? (
                     <UserCheck className="h-4 w-4 text-[#5df0a3]" />
                   ) : (
                     <XCircle className="h-4 w-4 text-[#ff6b6b]" />
                   )}
                 </div>
                 <p className="mt-2 text-xs leading-5 text-[#93a4ad]">
-                  {recipient.eligible ? "Accepted simulator path" : "Rejected simulator path"}
+                  {recipient.eligible && recipient.compliant
+                    ? "Accepted simulator path"
+                    : recipient.eligible
+                      ? "Eligible but not compliant"
+                      : "Rejected simulator path"}
                 </p>
               </button>
             ))}
@@ -579,7 +882,7 @@ function LocalDemoClaim() {
 }
 
 function DebugClaimData() {
-  const { campaign, tree } = useLumenDemo();
+  const { campaign, tree, complianceTree } = useLumenDemo();
   const [selectedId, setSelectedId] = useState<DemoRecipient["id"]>("alice");
   const [revealPrivate, setRevealPrivate] = useState(false);
   const selected = useMemo(
@@ -589,6 +892,8 @@ function DebugClaimData() {
     [selectedId]
   );
   const leaf = tree.recipientLeafById[selected.id] ?? "not in local demo tree";
+  const complianceLeaf =
+    complianceTree.recipientLeafById[selected.id] ?? "not in compliance tree";
 
   return (
     <Panel>
@@ -634,11 +939,14 @@ function DebugClaimData() {
           </p>
           <dl className="mt-4">
             <KeyValue label="Recipient" value={selected.displayName} />
+            <KeyValue label="Compliance status" value={selected.complianceStatus} />
             <KeyValue label="Campaign policy hash" value={campaign.policyHash} />
             <KeyValue label="Local demo leaf" value={leaf} redacted={!revealPrivate} />
+            <KeyValue label="Local compliance leaf" value={complianceLeaf} redacted={!revealPrivate} />
             <KeyValue label="recipient_secret" value={selected.recipientSecret} redacted={!revealPrivate} />
             <KeyValue label="identity_hash" value={selected.identityHash} redacted={!revealPrivate} />
             <KeyValue label="leaf_salt" value={selected.leafSalt} redacted={!revealPrivate} />
+            <KeyValue label="compliance_leaf_salt" value={selected.complianceLeafSalt} redacted={!revealPrivate} />
             <KeyValue label="amount_salt" value={selected.amountSalt} redacted={!revealPrivate} />
           </dl>
         </div>

@@ -1,4 +1,9 @@
-import type { CampaignConfig, ClaimPublicInputs, DemoRecipient } from "@lumen-aid/shared";
+import type {
+  CampaignConfig,
+  ClaimPublicInputs,
+  DemoRecipient,
+  Hex32
+} from "@lumen-aid/shared";
 
 export type Groth16Proof = {
   pi_a: [string, string, string];
@@ -36,6 +41,8 @@ export type BrowserClaimProofRequest = {
   recipient: DemoRecipient;
   recipients: DemoRecipient[];
   amount: number;
+  payoutAddress?: string;
+  payoutAccountHash?: Hex32;
   manifestPath?: string;
 };
 
@@ -56,4 +63,3 @@ export type BrowserClaimProofWorkerMessage =
       type: "error";
       error: string;
     };
-

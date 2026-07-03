@@ -11,14 +11,13 @@ This roadmap lists concrete next steps after the hackathon prototype. It intenti
 - Add reproducible artifact checksums.
 - Expand negative proof test vectors.
 
-## Phase 2 - Browser proving and testnet UX
+## Phase 2 - Browser proving and testnet UX hardening
 
-- Move proving into a browser worker.
-- Cache proving artifacts safely in the browser.
-- Add progress states and failure recovery for proving.
-- Wire browser claim submission to deployed testnet contracts.
-- Integrate wallet signing, starting with Freighter.
-- Add clear network/testnet/mainnet environment indicators.
+- Harden browser proving artifact caching for production-like environments.
+- Improve long-running browser proof progress recovery and retry handling.
+- Add direct wallet transaction signing, starting with Freighter.
+- Add production-grade sponsored relayer deployment and monitoring.
+- Add stronger environment indicators for testnet-only versus future production contexts.
 
 ## Phase 3 - Privacy improvements
 

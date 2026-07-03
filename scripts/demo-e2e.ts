@@ -146,6 +146,14 @@ function withWrongRoot(inputs: ClaimPublicInputs): ClaimPublicInputs {
   };
 }
 
+function withWrongComplianceRoot(inputs: ClaimPublicInputs): ClaimPublicInputs {
+  return {
+    ...inputs,
+    complianceRoot:
+      "0x0000000000000000000000000000000000000000000000000000000000000003" as Hex32
+  };
+}
+
 function withWrongPolicy(inputs: ClaimPublicInputs): ClaimPublicInputs {
   return {
     ...inputs,
@@ -168,6 +176,7 @@ async function main(): Promise<void> {
   await ensureRealBuild();
   pass(`Campaign ID: ${campaign.campaignId}`);
   pass(`Eligibility root: ${campaign.eligibilityRoot}`);
+  pass(`Compliance root: ${campaign.complianceRoot}`);
   pass(`Policy hash: ${campaign.policyHash}`);
   pass(`Per-recipient cap: ${campaign.perRecipientCap}`);
   pass(`Budget: ${campaign.budget}`);
@@ -249,10 +258,17 @@ async function main(): Promise<void> {
   pass("Over-cap rejected");
   pass("Claim totals unchanged; invalid counter updated");
 
-  section("6. Wrong root / wrong policy");
+  section("6. Wrong roots / wrong policy");
   const wrongRoot = await client.submitClaim(withWrongRoot(aliceProof.publicInputs), aliceProof.proof);
   expectResult(wrongRoot, "invalid_rejected", "Wrong root claim");
   pass("Wrong root rejected");
+
+  const wrongComplianceRoot = await client.submitClaim(
+    withWrongComplianceRoot(aliceProof.publicInputs),
+    aliceProof.proof
+  );
+  expectResult(wrongComplianceRoot, "invalid_rejected", "Wrong compliance root claim");
+  pass("Wrong compliance root rejected");
 
   const wrongPolicy = await client.submitClaim(withWrongPolicy(aliceProof.publicInputs), aliceProof.proof);
   expectResult(wrongPolicy, "invalid_rejected", "Wrong policy claim");

@@ -2,14 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Bug, HandCoins, LayoutDashboard, ShieldCheck } from "lucide-react";
+import { Activity, Bug, ClipboardList, FileCheck2, HandCoins, LayoutDashboard, ShieldCheck } from "lucide-react";
 import { clsx } from "clsx";
 
 const nav = [
   { href: "/", label: "Overview", icon: Activity },
+  { href: "/demo", label: "Demo", icon: ClipboardList },
   { href: "/operator", label: "Operator", icon: ShieldCheck },
   { href: "/recipient", label: "Recipient", icon: HandCoins },
   { href: "/donor", label: "Donor", icon: LayoutDashboard },
+  { href: "/auditor", label: "Auditor", icon: FileCheck2 },
   { href: "/debug", label: "Debug", icon: Bug }
 ];
 

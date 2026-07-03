@@ -4,10 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Database, MonitorCog, RefreshCw } from "lucide-react";
 import {
   getCampaignConfig,
+  getCampaignEscrowBalance,
   getCampaignStats,
   getVerifierStatus,
   type StellarReadResult,
   type TestnetCampaignConfig,
+  type TestnetEscrowBalance,
   type TestnetCampaignStats,
   type TestnetVerifierStatus
 } from "@lumen-aid/stellar";
@@ -37,6 +39,7 @@ type TestnetReadState =
       status: "loaded";
       active: ActiveTestnetConfigResult;
       config: StellarReadResult<TestnetCampaignConfig> | null;
+      escrow: StellarReadResult<TestnetEscrowBalance> | null;
       stats: StellarReadResult<TestnetCampaignStats> | null;
       verifier: StellarReadResult<TestnetVerifierStatus> | null;
     };
@@ -44,6 +47,11 @@ type TestnetReadState =
 type LastTx = {
   txHash: string;
   campaignContractId: string;
+  payoutRecipient?: string;
+  payoutAmount?: number;
+  assetCode?: string;
+  recipientBalanceAfter?: string | null;
+  campaignEscrowAfter?: string | null;
   at: string;
 };
 
@@ -110,6 +118,7 @@ export function DonorClient() {
         status: "loaded",
         active,
         config: null,
+        escrow: null,
         stats: null,
         verifier: null
       });
@@ -117,8 +126,9 @@ export function DonorClient() {
     }
 
     const env = activeToStellarEnv(active.active);
-    const [config, testnetStats, verifier] = await Promise.all([
+    const [config, escrow, testnetStats, verifier] = await Promise.all([
       getCampaignConfig(env),
+      getCampaignEscrowBalance(env),
       getCampaignStats(env),
       getVerifierStatus(env)
     ]);
@@ -130,6 +140,7 @@ export function DonorClient() {
       status: "loaded",
       active,
       config,
+      escrow,
       stats: testnetStats,
       verifier
     });
@@ -154,6 +165,7 @@ export function DonorClient() {
             message: error instanceof Error ? error.message : String(error)
           },
           config: null,
+          escrow: null,
           stats: null,
           verifier: null
         });
@@ -192,6 +204,10 @@ export function DonorClient() {
     testnetState.status === "loaded" && testnetState.stats?.status === "ready"
       ? testnetState.stats.data
       : null;
+  const testnetEscrow =
+    testnetState.status === "loaded" && testnetState.escrow?.status === "ready"
+      ? testnetState.escrow.data
+      : null;
   const testnetVerifier =
     testnetState.status === "loaded" && testnetState.verifier?.status === "ready"
       ? testnetState.verifier.data
@@ -203,6 +219,7 @@ export function DonorClient() {
     return (
       describeReadProblem(testnetState.active) ??
       describeReadProblem(testnetState.config) ??
+      describeReadProblem(testnetState.escrow) ??
       describeReadProblem(testnetState.stats) ??
       describeReadProblem(testnetState.verifier)
     );
@@ -242,6 +259,7 @@ export function DonorClient() {
                 <Button
                   type="button"
                   variant="secondary"
+                  data-testid="donor-refresh-button"
                   onClick={() => refreshTestnet().catch(() => undefined)}
                 >
                   <RefreshCw className="h-4 w-4" />
@@ -274,15 +292,22 @@ export function DonorClient() {
 
           {mode === "testnet" && active ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <Metric label="Budget" value={`$${testnetConfig?.budget ?? active.budget}`} tone="cyan" />
+              <Metric label="Configured budget" value={testnetConfig?.budget ?? active.budget} tone="cyan" />
+              <Metric label={`${active.assetCode ?? "Testnet asset"} escrow funded`} value={active.escrowFunded ?? "unread"} tone="green" />
               <Metric
-                label="Total claimed"
-                value={`$${testnetStats?.totalClaimed ?? "unread"}`}
+                label="Total distributed"
+                value={testnetStats?.totalClaimed ?? "unread"}
                 tone="green"
+                data-testid="donor-total-distributed"
               />
               <Metric
                 label="Remaining budget"
-                value={`$${testnetStats?.remainingBudget ?? "unread"}`}
+                value={testnetStats?.remainingBudget ?? "unread"}
+              />
+              <Metric
+                label="Actual token balance"
+                value={testnetEscrow?.balance ?? "unread"}
+                data-testid="donor-escrow-balance"
               />
               <Metric
                 label="Claim count"
@@ -295,10 +320,11 @@ export function DonorClient() {
                 tone="amber"
               />
               <Metric
-                label="Invalid claims blocked"
+                label="Non-compliant/ineligible attempts blocked"
                 value={testnetStats?.invalidClaimsBlocked.toString() ?? "unread"}
                 tone="red"
               />
+              <Metric label="Audit commitment" value="available" tone="cyan" />
             </div>
           ) : null}
 
@@ -309,7 +335,7 @@ export function DonorClient() {
               <Metric label="Remaining budget" value={`$${stats.remainingBudget}`} />
               <Metric label="Successful claims" value={stats.claimCount.toString()} tone="green" />
               <Metric label="Duplicates blocked" value={stats.duplicateClaimsBlocked.toString()} tone="amber" />
-              <Metric label="Invalid claims blocked" value={stats.invalidClaimsBlocked.toString()} tone="red" />
+              <Metric label="Non-compliant/ineligible blocked" value={stats.invalidClaimsBlocked.toString()} tone="red" />
             </div>
           ) : null}
         </div>
@@ -341,6 +367,23 @@ export function DonorClient() {
             <StatusDot tone={lastTx ? "green" : "neutral"} label="Last browser testnet tx" />
             <dl className="mt-4">
               <KeyValue label="Tx hash" value={lastTx?.txHash ?? "none in this browser session"} />
+              <KeyValue label="Last payout recipient" value={lastTx?.payoutRecipient ?? "none"} />
+              <KeyValue
+                label="Last payout amount"
+                value={
+                  lastTx?.payoutAmount === undefined
+                    ? "none"
+                    : `${lastTx.payoutAmount} ${lastTx.assetCode ?? active?.assetCode ?? "testnet asset"}`
+                }
+              />
+              <KeyValue
+                label="Recipient balance after"
+                value={lastTx?.recipientBalanceAfter ?? "none"}
+              />
+              <KeyValue
+                label="Escrow balance after"
+                value={lastTx?.campaignEscrowAfter ?? "none"}
+              />
               <KeyValue label="Claimed at" value={lastTx ? new Date(lastTx.at).toLocaleString() : "none"} />
             </dl>
           </div>
@@ -355,14 +398,24 @@ export function DonorClient() {
               <>
                 <KeyValue label="Campaign contract ID" value={active.campaignContractId} />
                 <KeyValue label="Verifier contract ID" value={active.verifierContractId} />
-                <KeyValue label="Mock token contract ID" value={active.mockTokenContractId} />
+                <KeyValue label="Asset code" value={active.assetCode ?? "testnet asset"} />
+                <KeyValue
+                  label="Asset contract ID"
+                  value={active.assetContractId ?? active.mockTokenContractId ?? "not configured"}
+                />
                 <KeyValue label="Campaign ID" value={testnetConfig?.campaignId ?? active.campaignId} />
                 <KeyValue
                   label="Eligibility root"
                   value={testnetConfig?.eligibilityRoot ?? active.eligibilityRoot}
                 />
+                <KeyValue
+                  label="Compliance root"
+                  value={testnetConfig?.complianceRoot ?? active.complianceRoot}
+                />
                 <KeyValue label="Policy hash" value={testnetConfig?.policyHash ?? active.policyHash} />
                 <KeyValue label="Budget" value={testnetConfig?.budget ?? active.budget} />
+                <KeyValue label="Escrow funded" value={active.escrowFunded ?? "unread"} />
+                <KeyValue label="Actual token balance" value={testnetEscrow?.balance ?? "unread"} />
                 <KeyValue label="Per-recipient cap" value={testnetConfig?.perRecipientCap ?? active.perRecipientCap} />
                 <KeyValue
                   label="Verifier key hash"
@@ -379,6 +432,7 @@ export function DonorClient() {
                 <KeyValue label="Mode" value="Local Demo" />
                 <KeyValue label="Campaign name" value={campaign.name} />
                 <KeyValue label="Eligibility root" value={campaign.eligibilityRoot} />
+                <KeyValue label="Compliance root" value={campaign.complianceRoot} />
                 <KeyValue label="Policy hash" value={campaign.policyHash} />
                 <KeyValue label="Asset" value={campaign.asset} />
               </>
@@ -402,9 +456,14 @@ export function DonorClient() {
                   tone={testnetProblem ? testnetProblem.tone : active ? "green" : "amber"}
                   label={testnetProblem ? testnetProblem.label : active ? "Active testnet read ready" : "Waiting"}
                 />
-                <p className="mt-3 text-sm leading-6 text-[#d8e7ec]">
-                  This dashboard does not fall back to local mock data while Testnet state is selected.
-                </p>
+                <dl className="mt-4">
+                  <KeyValue label="Recipient identity" value="hidden by ZK proof" />
+                  <KeyValue label="Compliance clearance" value="hidden by ZK proof" />
+                  <KeyValue label="Payout address" value="public Stellar address" />
+                  <KeyValue label="Selective disclosure" value="auditor-only demo package" />
+                  <KeyValue label="Witness data" value="never leaves browser" />
+                  <KeyValue label="Fallback data" value="none in Testnet state mode" />
+                </dl>
               </div>
             ) : (
               [...events].reverse().slice(0, 8).map((event) => (

@@ -49,10 +49,10 @@ describe("real ZK command pipeline", () => {
 
     expect(result.status).not.toBe(0);
     expect(`${result.stdout}\n${result.stderr}`).toContain("circom");
-  });
+  }, 45_000);
 
   beforeAll(() => {
-    const build = runPnpm(["zk:build"], { timeoutMs: 240_000 });
+    const build = runPnpm(["zk:build"], { timeoutMs: 600_000 });
     expect(`${build.stdout}\n${build.stderr}`).toContain(
       "ZK build completed with real Circom compilation"
     );
@@ -66,7 +66,7 @@ describe("real ZK command pipeline", () => {
     const verify = runPnpm(["zk:verify:local"], { timeoutMs: 120_000 });
     expect(verify.status).toBe(0);
     expect(verify.stdout).toContain("Verifier mode: real_local");
-  }, 500_000);
+  }, 900_000);
 
   it("Alice proof verifies using the real local verifier", () => {
     const summary = readJson<{

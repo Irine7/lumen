@@ -34,7 +34,11 @@ export async function GET() {
     );
   }
 
-  const active = JSON.parse(await readFile(activePath, "utf8")) as { network?: string };
+  const active = JSON.parse(await readFile(activePath, "utf8")) as {
+    network?: string;
+    complianceRoot?: string;
+    verifierInfo?: { verificationKeyHash?: string };
+  };
   if (active.network !== "testnet") {
     return NextResponse.json(
       {
@@ -45,9 +49,19 @@ export async function GET() {
     );
   }
 
+  if (!active.complianceRoot) {
+    return NextResponse.json(
+      {
+        status: "error",
+        message:
+          "Active deployment predates the compliance-root protocol. Run pnpm stellar:fresh-aidusd-campaign:testnet, or pnpm stellar:fresh-payout-campaign:testnet for native XLM fallback, after setting STELLAR_SOURCE_ACCOUNT."
+      },
+      { status: 409 }
+    );
+  }
+
   return NextResponse.json({
     status: "ready",
     active
   });
 }
-

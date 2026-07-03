@@ -1,42 +1,41 @@
 # Verifier Status
 
-This file is the canonical truth source for how Lumen should describe verification. The UI and submission materials must not claim anything stronger than this document.
+This file is the canonical truth source for how Lumen should describe proof generation, verification, and testnet claim status.
 
-## Allowed status labels
+## Allowed Status Labels
 
-Use only these labels in the frontend and demo:
+Use only these labels in the frontend and technical docs:
 
 - **Real local ZK proof**
 - **Real on-chain verification**
 - **Dev-only on-chain verifier**
 
-## Current truth table
+## Current Truth Table
 
 | Layer | Status | Command / code path | Notes |
 | --- | --- | --- | --- |
-| Circuit source | Real | `circuits/claim/claim.circom` | Circom claim circuit with Merkle membership, nullifier, cap, amount commitment, and recipient commitment constraints. |
-| Circuit compilation | Real | `pnpm zk:build` | Requires Circom. Fails if the compiler is missing. |
+| Circuit source | Real | `circuits/claim/claim.circom` | Circom claim circuit with eligibility membership, compliance clearance membership, nullifier, cap, amount commitment, and payout-bound recipient commitment constraints. |
+| Circuit compilation | Real | `pnpm zk:build` | Builds the compliance circuit with 10 public inputs and deterministic development Groth16 artifacts. |
 | Witness generation | Real | `pnpm zk:prove:demo` | Uses `claim_js/generate_witness.js` from Circom output. |
 | Proof generation | Real local ZK proof | `pnpm zk:prove:demo` | Uses `snarkjs groth16 prove` and writes Alice proof artifacts. |
-| Local proof verification | Real local ZK proof | `pnpm zk:prove:demo`, `pnpm zk:verify:local` | Uses `snarkjs groth16 verify` and `verification_key.json`. |
-| Negative local verification | Real local ZK proof | `pnpm zk:verify:local` | Alice passes; Mallory, over-cap, tampered public input, tampered proof, wrong campaign ID, and wrong policy hash fail. |
-| Soroban verifier contract default | Real on-chain verification for current development key | `contracts/verifier`, `pnpm contracts:test` | Uses Soroban BN254 pairing checks against the embedded `claim_v0` development verification key. |
-| Verifier self-identification | Real on-chain introspection | `verifier_info()` | Default build reports `mode = real_groth16`, `version = claim_v0`; dev-feature build reports `mode = dev_verifier`. Legacy deployed verifiers are labeled "Verifier mode: legacy verifier, mode not introspectable". |
-| Soroban campaign contract integration | Real on-chain verification in tests | `contracts/campaign`, `pnpm contracts:test` | Campaign calls verifier before storing nullifier or updating claim stats. |
-| Soroban dev verifier feature | Dev-only on-chain verifier | `contracts/verifier --features dev_verifier`, `pnpm contracts:test:dev` | Explicit feature path that accepts deterministic test bytes. Not ZK. Root `pnpm contracts:test` does not enable it. |
+| Local proof verification | Real local ZK proof | `pnpm zk:verify:local` | Uses `snarkjs groth16 verify` and `verification_key.json`. |
+| Compliance negative verification | Real local ZK proof | `pnpm zk:verify:compliance` | Alice passes; Eve, Mallory, tampered compliance root/path, wrong policy, over-cap, and proof/public-input tampering fail. |
+| Soroban verifier contract default | Real on-chain verification for current development key | `contracts/verifier`, `pnpm contracts:test` | Uses Soroban BN254 pairing checks against the embedded `claim_v0` deterministic development verification key. |
+| Verifier self-identification | Real on-chain introspection | `verifier_info()` | Default build reports `mode = real_groth16`, `version = claim_v0`; dev-feature build reports `mode = dev_verifier`. |
+| Soroban campaign contract integration | Real on-chain verification in tests | `contracts/campaign`, `pnpm contracts:test` | Campaign checks roots, payout binding, cap, duplicate nullifier, and verifier result before storing nullifier or transferring assets. |
+| Soroban dev verifier feature | Dev-only on-chain verifier | `contracts/verifier --features dev_verifier`, `pnpm contracts:test:dev` | Explicit feature path that accepts deterministic test bytes. Not ZK. |
 | TypeScript local demo proof envelope | Dev-only on-chain verifier | `packages/prover`, Local Demo mode | Requires explicit `mode: "dev_verifier"`. Not Groth16. |
-| Browser proof generation | Real local ZK proof | `apps/web/workers/claim-proof.worker.ts`, `pnpm web:e2e:testnet` | Uses browser snarkjs Groth16 proving with public artifacts from `pnpm web:zk:prepare`. |
-| Browser local verification | Real local ZK proof | `apps/web/workers/claim-proof.worker.ts`, `pnpm web:e2e:testnet` | Uses browser snarkjs Groth16 verification before submission. |
-| Browser testnet submission | Real on-chain verification smoke path | `/api/testnet/claim`, `pnpm web:e2e:testnet` | Browser sends only proof encoding and public inputs to a testnet-only local relayer; Soroban campaign/verifier accepts or rejects. |
+| Browser proof generation | Real local ZK proof | `apps/web/workers/claim-proof.worker.ts` | Uses browser snarkjs Groth16 proving with public artifacts from `pnpm web:zk:prepare`. |
+| Browser local verification | Real local ZK proof | `apps/web/workers/claim-proof.worker.ts` | Uses browser snarkjs Groth16 verification before submission. |
+| Browser testnet claim submission | Real on-chain verification when active deployment is compliance-current | `/api/testnet/claim` | Browser sends proof encoding, ten public inputs, and public payout recipient to a testnet-only local relayer. The route now rejects pre-compliance active deployments. |
+| Native XLM SAC payout path | Real testnet fallback | `pnpm stellar:fresh-payout-campaign:testnet`, `pnpm stellar:smoke:payout:testnet` | Preserved as fallback. |
+| AIDUSD SAC payout path | Real testnet validated | `pnpm stellar:asset:setup-aidusd:testnet`, `pnpm stellar:fresh-aidusd-campaign:testnet`, `pnpm stellar:smoke:aidusd:testnet`, `pnpm web:e2e:compliance:testnet` | Preferred stablecoin-style path. Live testnet setup, fresh compliance deployment, CLI smoke, and browser e2e passed on July 2, 2026. |
+| Auditor selective disclosure | Product-layer demo | `apps/web/app/auditor` | Loads local demo audit package; does not put PII on-chain and does not imply real KYC provider integration. |
 | Dev artifact build | Dev-only on-chain verifier | `pnpm zk:build:dev` | May skip Circom; must warn that it is not cryptographic verification. |
-| Testnet deployment | Real on-chain verification deployed | `pnpm stellar:deploy:testnet`, `pnpm stellar:init-campaign:testnet` | Verifier, campaign, mock token, and deterministic campaign metadata are recorded in `deployments/`. |
-| Testnet Alice claim smoke | Real on-chain verification smoke path | `pnpm stellar:claim:alice:testnet` | Alice claim accepted on deployed campaign after local proof generation/verification and deployed verifier smoke path. |
-| Testnet duplicate smoke | Real on-chain verification smoke path | `pnpm stellar:claim:alice-duplicate:testnet` | Duplicate rejected with `DuplicateNullifier #10`. |
-| Fresh active testnet campaign | Real on-chain verification smoke path | `pnpm stellar:fresh-campaign:testnet`, `pnpm stellar:active:testnet` | Creates a fresh campaign for browser/smoke validation and records only public data in `deployments/active-testnet.json`. |
 | Production trusted setup | Not implemented | Future work | Current `ptau`/`zkey` are deterministic development artifacts. |
-| Audit | Not completed | Future work | Circuit, setup, prover, and contracts need external review before production. |
+| Audit | Not completed | Future work | Circuit, setup, prover, contracts, relayer, and frontend need external review before production. |
 
-## Real local ZK proof
+## Real Local ZK Proof
 
 The real local proof path is:
 
@@ -49,19 +48,22 @@ claim.circom
   -> snarkjs local verification
 ```
 
-Expected `pnpm zk:prove:demo` output includes:
+The compliance circuit constrains:
 
 ```txt
-Proof system: Groth16
-Circuit: circuits/claim/claim.circom
-Proof generated: true
-Local verification: true
-Verifier mode: real_local
+eligibility_leaf = Poseidon(recipient_secret, identity_hash, leaf_salt, policy_hash)
+computed_eligibility_root == eligibility_root
+compliance_leaf = Poseidon(recipient_secret, identity_hash, compliance_leaf_salt, policy_hash)
+computed_compliance_root == compliance_root
+nullifier_hash = Poseidon(recipient_secret, campaign_id)
+amount <= max_amount
+amount_commitment = Poseidon(amount, amount_salt, campaign_id)
+recipient_commitment = Poseidon(recipient_secret, policy_hash, payout_account_hash)
 ```
 
-This can be described as **Real local ZK proof**.
+`policy_hash` currently folds the demo compliance provider/policy scope. There is no separate production KYC/sanctions provider integration.
 
-## Real on-chain verification
+## Real On-Chain Verification
 
 `contracts/verifier` performs BN254 Groth16 verification by default for the current `claim_v0` circuit and embedded deterministic development verification key.
 
@@ -76,12 +78,20 @@ Public signal order:
 ```txt
 campaign_id
 eligibility_root
+compliance_root
 policy_hash
 nullifier_hash
 amount
 max_amount
 amount_commitment
 recipient_commitment
+payout_account_hash
+```
+
+Current deterministic development verification key hash:
+
+```txt
+0xf3be0265175696a6ecc1530ad5789f1ac0e0e899dee49ff066a049545db64e92
 ```
 
 `pnpm contracts:test` verifies that:
@@ -91,17 +101,17 @@ recipient_commitment
 - tampered public input fails,
 - tampered proof data fails,
 - malformed proof data fails,
-- the campaign contract rejects a claim when the verifier rejects the proof.
+- wrong compliance root fails,
+- the campaign contract rejects a claim when the verifier rejects the proof,
+- no nullifier is stored and no asset is transferred before proof verification succeeds.
 
-This can be described as **Real on-chain verification** for local contract tests and the deployed testnet smoke path.
-
-Important qualification:
+Important qualifications:
 
 - The verification key is a deterministic development verification key.
 - Production trusted setup is not complete.
-- Browser-submitted testnet claims are implemented through the local testnet relayer, not Freighter.
+- Browser-submitted testnet payout claims use a local testnet relayer. Freighter address binding is implemented; direct Freighter transaction signing is not implemented.
 
-## Dev-only verifier boundary
+## Dev-Only Verifier Boundary
 
 `dev_verifier` is not cryptographic proof verification. It exists only for:
 
@@ -120,7 +130,7 @@ and must not imply production ZK.
 
 The real local/browser commands do not silently fall back to dev behavior.
 
-## Testnet status
+## Testnet Status
 
 Current public active testnet IDs are written to:
 
@@ -128,13 +138,22 @@ Current public active testnet IDs are written to:
 deployments/active-testnet.json
 ```
 
+Compliance-aware browser e2e rejects active metadata that lacks `complianceRoot` or the current verifier key. The current active testnet deployment is AIDUSD/SAC, includes `complianceRoot`, and uses the current `claim_v0` verifier key hash.
+
 Smoke-test commands:
 
 ```bash
-pnpm stellar:fresh-campaign:testnet
-pnpm stellar:active:testnet
-pnpm stellar:smoke:testnet:full
-pnpm web:e2e:testnet
+pnpm stellar:fresh-payout-campaign:testnet
+pnpm stellar:payout:active:testnet
+pnpm stellar:smoke:payout:testnet
+pnpm web:e2e:payout:testnet
+pnpm stellar:asset:doctor:testnet
+pnpm stellar:asset:setup-aidusd:testnet
+pnpm stellar:fresh-aidusd-campaign:testnet
+pnpm stellar:aidusd:active:testnet
+pnpm stellar:smoke:aidusd:testnet
+pnpm stellar:smoke:compliance:testnet
+pnpm web:e2e:compliance:testnet
 ```
 
 Accurate status wording:
@@ -143,14 +162,20 @@ Accurate status wording:
 Local cryptographic proof verification: real.
 Browser cryptographic proof generation: real Groth16.
 Browser local proof verification: real Groth16.
-On-chain cryptographic proof verification: real for the active deployed testnet verifier path.
-Browser testnet submission: implemented through testnet-only local relayer.
+Eligibility proof: real Merkle membership proof.
+Compliance clearance proof: real Merkle membership proof over demo clearance root.
+On-chain cryptographic proof verification: real for local contract tests and fresh testnet deployments using the current verifier key.
+Payout binding: real proof-bound payout_account_hash checked by relayer and campaign.
+AIDUSD payout: live testnet setup/deployment/smoke/browser e2e validated.
+Native XLM SAC payout: preserved fallback path.
+Browser testnet submission: implemented through testnet-only local relayer when active deployment is current.
 Local Demo verifier: dev-only simulator envelope.
 ```
 
-## Remaining production work
+## Remaining Production Work
 
 - Replace deterministic development setup with a production ceremony.
 - Generate and manage production verification keys.
-- Add Freighter wallet mode or a production-grade relayer.
-- Audit the circuit, setup, prover, and contracts.
+- Integrate a real compliance/KYC/sanctions provider and policy attestation process.
+- Add direct Freighter signing mode or a production-grade sponsored relayer.
+- Audit the circuit, setup, prover, contracts, relayer, and frontend.

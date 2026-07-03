@@ -2,7 +2,11 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { testnetDemoRecipients } from "@lumen-aid/shared";
-import { buildDemoEligibilityTree, createDemoCampaignConfig } from "@lumen-aid/merkle";
+import {
+  buildDemoComplianceTree,
+  buildDemoEligibilityTree,
+  createDemoCampaignConfig
+} from "@lumen-aid/merkle";
 import {
   activeCampaignConfigArgPath,
   activeTestnetPath,
@@ -201,8 +205,9 @@ async function main(): Promise<void> {
   const campaignContractId = deployContract("campaign", campaignWasm, sourceAccount);
 
   const tree = buildDemoEligibilityTree(testnetDemoRecipients);
+  const complianceTree = buildDemoComplianceTree(testnetDemoRecipients);
   const campaign = {
-    ...createDemoCampaignConfig(tree),
+    ...createDemoCampaignConfig(tree, complianceTree),
     campaignId: uniqueCampaignId(),
     operator,
     asset: mockTokenContractId,
@@ -215,6 +220,7 @@ async function main(): Promise<void> {
     asset: mockTokenContractId,
     budget: String(campaign.budget),
     campaign_id: strip0x(campaign.campaignId),
+    compliance_root: strip0x(campaign.complianceRoot),
     deny_root: null,
     eligibility_root: strip0x(campaign.eligibilityRoot),
     end_ledger: campaign.endLedger,
@@ -242,8 +248,10 @@ async function main(): Promise<void> {
     campaignContractId,
     verifierContractId,
     mockTokenContractId,
+    assetMode: "mock_token",
     campaignId: campaign.campaignId,
     eligibilityRoot: campaign.eligibilityRoot,
+    complianceRoot: campaign.complianceRoot,
     policyHash: campaign.policyHash,
     operator,
     asset: mockTokenContractId,
@@ -263,6 +271,7 @@ async function main(): Promise<void> {
       id: recipient.id,
       displayName: recipient.displayName,
       eligible: recipient.eligible,
+      compliant: recipient.compliant,
       defaultClaimAmount: recipient.defaultClaimAmount
     })),
     notes:
@@ -273,6 +282,7 @@ async function main(): Promise<void> {
   console.log(`[ok] wrote ${activeTestnetPath}`);
   console.log(`[ok] active campaign ID: ${active.campaignId}`);
   console.log(`[ok] active eligibility root: ${active.eligibilityRoot}`);
+  console.log(`[ok] active compliance root: ${active.complianceRoot}`);
   console.log(`[ok] verifier mode: ${active.verifierInfo.mode}`);
 }
 

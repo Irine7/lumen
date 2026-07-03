@@ -3,7 +3,14 @@ import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { buildDemoEligibilityTree, createDemoCampaignConfig } from "@lumen-aid/merkle";
+import {
+  buildDemoComplianceTree,
+  buildDemoEligibilityTree,
+  createDemoCampaignConfig
+} from "@lumen-aid/merkle";
+import { assertLocalStellarSourceAccount, loadTestnetEnv } from "./lib/load-env";
+
+loadTestnetEnv();
 
 export const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const network = "testnet";
@@ -55,6 +62,7 @@ export interface TestnetCampaignState {
   mockTokenContractId: string;
   campaignId: string;
   eligibilityRoot: string;
+  complianceRoot: string;
   policyHash: string;
   operator: string;
   asset: string;
@@ -71,9 +79,15 @@ export interface ActiveTestnetDeployment {
   network: "testnet";
   campaignContractId: string;
   verifierContractId: string;
-  mockTokenContractId: string;
+  mockTokenContractId?: string;
+  assetContractId?: string;
+  assetMode?: "native_xlm_sac" | "aidusd_sac" | "mock_token";
+  assetCode?: string;
+  assetIssuer?: string;
+  escrowFunded?: string;
   campaignId: string;
   eligibilityRoot: string;
+  complianceRoot: string;
   policyHash: string;
   operator: string;
   asset: string;
@@ -97,8 +111,12 @@ export interface ActiveTestnetDeployment {
   recipients: {
     id: string;
     displayName: string;
+    name?: string;
     eligible: boolean;
+    compliant?: boolean;
     defaultClaimAmount: number;
+    payoutAddress?: string;
+    payoutAccountHash?: string;
   }[];
   notes: string;
 }
@@ -139,13 +157,9 @@ export function run(
 }
 
 export function requireCleanSourceAccount(): string {
-  const sourceAccount = process.env.STELLAR_SOURCE_ACCOUNT?.trim();
+  const sourceAccount = assertLocalStellarSourceAccount();
   if (!sourceAccount) {
     throw new Error("STELLAR_SOURCE_ACCOUNT is required. Use a local Stellar CLI key name, not a private key.");
-  }
-
-  if (/^S[A-Z2-7]{55}$/.test(sourceAccount)) {
-    throw new Error("Refusing to use a secret key in STELLAR_SOURCE_ACCOUNT. Use a local Stellar CLI key name.");
   }
 
   if (process.env.STELLAR_NETWORK && process.env.STELLAR_NETWORK !== network) {
@@ -182,7 +196,8 @@ export function strip0x(value: string): string {
 
 export function demoCampaignValues(deployment: TestnetDeployment, operator: string) {
   const tree = buildDemoEligibilityTree();
-  const campaign = createDemoCampaignConfig(tree);
+  const complianceTree = buildDemoComplianceTree();
+  const campaign = createDemoCampaignConfig(tree, complianceTree);
   const startLedger = 1;
   const endLedger = 4_294_967_295;
 
@@ -192,6 +207,7 @@ export function demoCampaignValues(deployment: TestnetDeployment, operator: stri
       asset: deployment.mockTokenContractId,
       budget: String(campaign.budget),
       campaign_id: strip0x(campaign.campaignId),
+      compliance_root: strip0x(campaign.complianceRoot),
       deny_root: null,
       eligibility_root: strip0x(campaign.eligibilityRoot),
       end_ledger: endLedger,
@@ -210,10 +226,12 @@ export function demoCampaignValues(deployment: TestnetDeployment, operator: stri
 export function claimPublicInputsFromNamedInputs(publicInputs: {
   campaignId: string;
   eligibilityRoot: string;
+  complianceRoot: string;
   policyHash: string;
   nullifierHash: string;
   amountCommitment: string;
   recipientCommitment: string;
+  payoutAccountHash: string;
   amount: number;
   maxAmount: number;
 }) {
@@ -221,9 +239,11 @@ export function claimPublicInputsFromNamedInputs(publicInputs: {
     amount: String(publicInputs.amount),
     amount_commitment: strip0x(publicInputs.amountCommitment),
     campaign_id: strip0x(publicInputs.campaignId),
+    compliance_root: strip0x(publicInputs.complianceRoot),
     eligibility_root: strip0x(publicInputs.eligibilityRoot),
     max_amount: String(publicInputs.maxAmount),
     nullifier_hash: strip0x(publicInputs.nullifierHash),
+    payout_account_hash: strip0x(publicInputs.payoutAccountHash),
     policy_hash: strip0x(publicInputs.policyHash),
     recipient_commitment: strip0x(publicInputs.recipientCommitment)
   };
@@ -267,10 +287,12 @@ export async function alicePublicInputs() {
   return readJson<{
     campaignId: string;
     eligibilityRoot: string;
+    complianceRoot: string;
     policyHash: string;
     nullifierHash: string;
     amountCommitment: string;
     recipientCommitment: string;
+    payoutAccountHash: string;
     amount: number;
     maxAmount: number;
   }>(path);

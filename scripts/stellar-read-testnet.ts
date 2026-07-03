@@ -15,6 +15,7 @@ interface CampaignConfig {
   asset: string;
   budget: string;
   campaign_id: string;
+  compliance_root: string;
   deny_root: string | null;
   eligibility_root: string;
   end_ledger: number;
@@ -102,9 +103,11 @@ async function verifierCallable(args: {
           amount: "1",
           amount_commitment: zeroHex32(),
           campaign_id: zeroHex32(),
+          compliance_root: zeroHex32(),
           eligibility_root: zeroHex32(),
           max_amount: "1",
           nullifier_hash: zeroHex32(),
+          payout_account_hash: zeroHex32(),
           policy_hash: zeroHex32(),
           recipient_commitment: zeroHex32()
         },
@@ -162,6 +165,7 @@ async function main(): Promise<void> {
   console.log("[ok] campaign stats callable: get_stats");
 
   expectEqual(config.campaign_id, strip0x(campaignState.campaignId), "campaign ID");
+  expectEqual(config.compliance_root, strip0x(campaignState.complianceRoot), "compliance root");
   expectEqual(config.eligibility_root, strip0x(campaignState.eligibilityRoot), "eligibility root");
   expectEqual(config.policy_hash, strip0x(campaignState.policyHash), "policy hash");
   expectEqual(config.verifier, deployment.verifierContractId, "verifier contract ID");
@@ -198,6 +202,7 @@ async function main(): Promise<void> {
         verifierContractId: deployment.verifierContractId,
         mockTokenContractId: deployment.mockTokenContractId,
         campaignId: config.campaign_id,
+        complianceRoot: config.compliance_root,
         eligibilityRoot: config.eligibility_root,
         policyHash: config.policy_hash,
         verifierInfo: verifierInfo ?? {

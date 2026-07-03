@@ -67,8 +67,10 @@ export function Button({
 export function Metric({
   label,
   value,
-  tone = "neutral"
-}: {
+  tone = "neutral",
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement> & {
   label: string;
   value: string;
   tone?: "neutral" | "cyan" | "green" | "amber" | "red";
@@ -82,7 +84,13 @@ export function Metric({
   }[tone];
 
   return (
-    <div className="min-w-0 rounded-lg border border-[#26313d] bg-[#10161d] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+    <div
+      className={clsx(
+        "min-w-0 rounded-lg border border-[#26313d] bg-[#10161d] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]",
+        className
+      )}
+      {...props}
+    >
       <div className="text-xs font-medium uppercase text-[#93a4ad]">{label}</div>
       <div className={clsx("mt-2 text-2xl font-semibold", color)}>{value}</div>
     </div>

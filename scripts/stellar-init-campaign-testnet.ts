@@ -58,6 +58,7 @@ async function main(): Promise<void> {
     mockTokenContractId: deployment.mockTokenContractId,
     campaignId: campaign.campaignId,
     eligibilityRoot: campaign.eligibilityRoot,
+    complianceRoot: campaign.complianceRoot,
     policyHash: campaign.policyHash,
     operator: publicKey,
     asset: deployment.mockTokenContractId,
@@ -68,13 +69,14 @@ async function main(): Promise<void> {
     initializedAt: new Date().toISOString(),
     mode: "real_groth16_verifier",
     notes:
-      "Deterministic demo campaign initialized on Stellar testnet with the same eligibility root and policy hash used by the local demo."
+      "Deterministic demo campaign initialized on Stellar testnet with the same eligibility/compliance roots and policy hash used by the local demo."
   };
 
   await writeJson(campaignStatePath, state);
   console.log(`[ok] wrote ${campaignStatePath}`);
   console.log(`Campaign ID: ${campaign.campaignId}`);
   console.log(`Eligibility root: ${campaign.eligibilityRoot}`);
+  console.log(`Compliance root: ${campaign.complianceRoot}`);
   console.log(`Policy hash: ${campaign.policyHash}`);
 }
 

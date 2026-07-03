@@ -16,8 +16,7 @@ const CIRCUIT_ID_BYTES: [u8; 32] = [
 
 #[cfg(not(feature = "dev_verifier"))]
 const REAL_VERIFICATION_KEY_HASH_BYTES: [u8; 32] = [
-    0xc0, 0xba, 0x74, 0x7b, 0x09, 0xaa, 0x4b, 0xad, 0x0c, 0x4e, 0x10, 0xe9, 0x81, 0xff, 0x9c, 0xd2,
-    0x33, 0xf6, 0xf7, 0xff, 0x68, 0x07, 0x93, 0xd2, 0xe2, 0x4b, 0xf6, 0x85, 0xf1, 0x1d, 0x84, 0x3f,
+    0xf3, 0xbe, 0x02, 0x65, 0x17, 0x56, 0x96, 0xa6, 0xec, 0xc1, 0x53, 0x0a, 0xd5, 0x78, 0x9f, 0x1a, 0xc0, 0xe0, 0xe8, 0x99, 0xde, 0xe4, 0x9f, 0xf0, 0x66, 0xa0, 0x49, 0x54, 0x5d, 0xb6, 0x4e, 0x92,
 ];
 
 #[cfg(feature = "dev_verifier")]
@@ -31,10 +30,12 @@ const DEV_VERIFICATION_KEY_HASH_BYTES: [u8; 32] = [
 pub struct ClaimPublicInputs {
     pub campaign_id: BytesN<32>,
     pub eligibility_root: BytesN<32>,
+    pub compliance_root: BytesN<32>,
     pub policy_hash: BytesN<32>,
     pub nullifier_hash: BytesN<32>,
     pub amount_commitment: BytesN<32>,
     pub recipient_commitment: BytesN<32>,
+    pub payout_account_hash: BytesN<32>,
     pub amount: i128,
     pub max_amount: i128,
 }
@@ -58,10 +59,7 @@ impl VerifierContract {
         VerifierInfo {
             verifier_id: BytesN::from_array(&env, &VERIFIER_ID_BYTES),
             circuit_id: BytesN::from_array(&env, &CIRCUIT_ID_BYTES),
-            verification_key_hash: BytesN::from_array(
-                &env,
-                verification_key_hash_bytes(),
-            ),
+            verification_key_hash: BytesN::from_array(&env, verification_key_hash_bytes()),
             mode: Symbol::new(&env, verifier_mode()),
             version: Symbol::new(&env, "claim_v0"),
         }
@@ -127,6 +125,10 @@ pub mod test_fixtures {
                 env,
                 &groth16_claim_v0::ALICE_ELIGIBILITY_ROOT_BYTES,
             ),
+            compliance_root: BytesN::from_array(
+                env,
+                &groth16_claim_v0::ALICE_COMPLIANCE_ROOT_BYTES,
+            ),
             policy_hash: BytesN::from_array(env, &groth16_claim_v0::ALICE_POLICY_HASH_BYTES),
             nullifier_hash: BytesN::from_array(env, &groth16_claim_v0::ALICE_NULLIFIER_HASH_BYTES),
             amount_commitment: BytesN::from_array(
@@ -136,6 +138,10 @@ pub mod test_fixtures {
             recipient_commitment: BytesN::from_array(
                 env,
                 &groth16_claim_v0::ALICE_RECIPIENT_COMMITMENT_BYTES,
+            ),
+            payout_account_hash: BytesN::from_array(
+                env,
+                &groth16_claim_v0::ALICE_PAYOUT_ACCOUNT_HASH_BYTES,
             ),
             amount: 125,
             max_amount: 250,
@@ -183,10 +189,12 @@ mod test {
         ClaimPublicInputs {
             campaign_id: bytes32(env, 1),
             eligibility_root: bytes32(env, 2),
-            policy_hash: bytes32(env, 3),
-            nullifier_hash: bytes32(env, 4),
-            amount_commitment: bytes32(env, 5),
-            recipient_commitment: bytes32(env, 6),
+            compliance_root: bytes32(env, 3),
+            policy_hash: bytes32(env, 4),
+            nullifier_hash: bytes32(env, 5),
+            amount_commitment: bytes32(env, 6),
+            recipient_commitment: bytes32(env, 7),
+            payout_account_hash: bytes32(env, 8),
             amount: 100,
             max_amount: 250,
         }

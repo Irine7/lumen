@@ -8,12 +8,16 @@ import type {
   Hex32,
   MerkleProof
 } from "@lumen-aid/shared";
+import { DEMO_PAYOUT_ACCOUNT_HASH } from "@lumen-aid/shared";
 import {
+  buildDemoComplianceTree,
   createEligibilityLeaf,
+  createComplianceLeaf,
   derivePublicInputs,
   getMerkleProofForRecipient,
   publicInputsHash,
   verifyMerkleProofLocally,
+  type DemoComplianceTree,
   type DemoEligibilityTree
 } from "@lumen-aid/merkle";
 
@@ -21,20 +25,25 @@ export interface GenerateClaimProofInput {
   mode: "dev_verifier";
   campaign: CampaignConfig;
   tree: DemoEligibilityTree;
+  complianceTree?: DemoComplianceTree;
   recipient: DemoRecipient;
   amount: number;
+  payoutAccountHash?: Hex32;
   proofOverride?: {
     merkleProof?: MerkleProof;
+    complianceMerkleProof?: MerkleProof;
   };
 }
 
 export interface SorobanClaimPublicInputTuple {
   campaign_id: Hex32;
   eligibility_root: Hex32;
+  compliance_root: Hex32;
   policy_hash: Hex32;
   nullifier_hash: Hex32;
   amount_commitment: Hex32;
   recipient_commitment: Hex32;
+  payout_account_hash: Hex32;
   amount: string;
   max_amount: string;
 }
@@ -43,7 +52,8 @@ const DEV_PROOF_PREFIX = "lumen-dev-verifier-v1";
 
 function createPrivateInputs(
   recipient: DemoRecipient,
-  proof: MerkleProof
+  proof: MerkleProof,
+  complianceProof: MerkleProof
 ): ClaimPrivateInputs {
   return {
     recipientSecret: recipient.recipientSecret,
@@ -51,8 +61,12 @@ function createPrivateInputs(
     leafSalt: recipient.leafSalt,
     eligibilityMerklePath: proof.path,
     eligibilityMerkleIndices: proof.indices,
+    complianceLeafSalt: recipient.complianceLeafSalt,
+    complianceMerklePath: complianceProof.path,
+    complianceMerkleIndices: complianceProof.indices,
     amountSalt: recipient.amountSalt,
-    eligibilityReason: recipient.eligibilityReason
+    eligibilityReason: recipient.eligibilityReason,
+    complianceStatus: recipient.complianceStatus
   };
 }
 
@@ -80,6 +94,7 @@ export function validateClaimWitness(input: {
   recipient: DemoRecipient;
   amount: number;
   merkleProof: MerkleProof | null;
+  complianceMerkleProof: MerkleProof | null;
 }): string[] {
   const errors: string[] = [];
 
@@ -121,6 +136,35 @@ export function validateClaimWitness(input: {
     errors.push("Merkle proof does not resolve to campaign eligibility root");
   }
 
+  if (!input.complianceMerkleProof) {
+    errors.push("Recipient is not included in the compliance clearance Merkle tree");
+    return errors;
+  }
+
+  const expectedComplianceLeaf = createComplianceLeaf({
+    recipientSecret: input.recipient.recipientSecret,
+    identityHash: input.recipient.identityHash,
+    complianceLeafSalt: input.recipient.complianceLeafSalt,
+    policyHash: input.campaign.policyHash
+  });
+
+  if (
+    expectedComplianceLeaf.toLowerCase() !==
+    input.complianceMerkleProof.leaf.toLowerCase()
+  ) {
+    errors.push("Compliance Merkle proof leaf does not match recipient witness");
+  }
+
+  if (
+    !verifyMerkleProofLocally(
+      input.complianceMerkleProof.leaf,
+      input.complianceMerkleProof,
+      input.campaign.complianceRoot
+    )
+  ) {
+    errors.push("Merkle proof does not resolve to campaign compliance root");
+  }
+
   return errors;
 }
 
@@ -134,18 +178,24 @@ export async function generateClaimProof(
   const merkleProof =
     input.proofOverride?.merkleProof ??
     getMerkleProofForRecipient(input.tree, input.recipient);
+  const complianceTree = input.complianceTree ?? buildDemoComplianceTree();
+  const complianceMerkleProof =
+    input.proofOverride?.complianceMerkleProof ??
+    getMerkleProofForRecipient(complianceTree, input.recipient);
 
   const publicInputs = derivePublicInputs({
     campaign: input.campaign,
     recipient: input.recipient,
-    amount: input.amount
+    amount: input.amount,
+    payoutAccountHash: input.payoutAccountHash ?? DEMO_PAYOUT_ACCOUNT_HASH
   });
 
   const errors = validateClaimWitness({
     campaign: input.campaign,
     recipient: input.recipient,
     amount: input.amount,
-    merkleProof
+    merkleProof,
+    complianceMerkleProof
   });
 
   const ok = errors.length === 0;
@@ -157,13 +207,13 @@ export async function generateClaimProof(
     errors
   };
 
-  if (!merkleProof) {
+  if (!merkleProof || !complianceMerkleProof) {
     return resultBase;
   }
 
   return {
     ...resultBase,
-    privateInputs: createPrivateInputs(input.recipient, merkleProof)
+    privateInputs: createPrivateInputs(input.recipient, merkleProof, complianceMerkleProof)
   };
 }
 
@@ -193,10 +243,12 @@ export function formatPublicInputsForSoroban(
   return {
     campaign_id: publicInputs.campaignId,
     eligibility_root: publicInputs.eligibilityRoot,
+    compliance_root: publicInputs.complianceRoot,
     policy_hash: publicInputs.policyHash,
     nullifier_hash: publicInputs.nullifierHash,
     amount_commitment: publicInputs.amountCommitment,
     recipient_commitment: publicInputs.recipientCommitment,
+    payout_account_hash: publicInputs.payoutAccountHash,
     amount: publicInputs.amount.toString(),
     max_amount: publicInputs.maxAmount.toString()
   };
