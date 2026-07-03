@@ -1,6 +1,5 @@
 import type { CampaignConfig, DemoRecipient, Hex32 } from "@lumen-aid/shared";
 import { testnetDemoRecipients } from "@lumen-aid/shared";
-import type { LumenStellarEnv } from "@lumen-aid/stellar";
 
 export type ActiveTestnetDeployment = {
   network: "testnet";
@@ -74,16 +73,6 @@ export function activeToCampaign(active: ActiveTestnetDeployment): CampaignConfi
     startLedger: active.startLedger,
     endLedger: active.endLedger,
     isActive: true
-  };
-}
-
-export function activeToStellarEnv(active: ActiveTestnetDeployment): LumenStellarEnv {
-  return {
-    network: "testnet",
-    rpcUrl: process.env.NEXT_PUBLIC_RPC_URL ?? "",
-    campaignContractId: active.campaignContractId,
-    verifierContractId: active.verifierContractId,
-    mockTokenContractId: active.mockTokenContractId ?? active.assetContractId ?? ""
   };
 }
 

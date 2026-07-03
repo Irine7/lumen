@@ -1,27 +1,33 @@
-import { readLumenStellarEnv, type LumenStellarEnv } from "@lumen-aid/stellar";
-
 export type PublicTestnetStatus =
   | { kind: "connected"; label: "Testnet connected"; tone: "green" }
-  | { kind: "not_configured"; label: "Testnet not configured"; tone: "amber" }
+  | { kind: "server_read"; label: "Testnet state via server"; tone: "cyan" }
   | { kind: "local_demo"; label: "Local demo only"; tone: "amber" };
 
-export function readPublicStellarEnv(): LumenStellarEnv {
-  return readLumenStellarEnv({
-    NEXT_PUBLIC_STELLAR_NETWORK: process.env.NEXT_PUBLIC_STELLAR_NETWORK,
-    NEXT_PUBLIC_RPC_URL: process.env.NEXT_PUBLIC_RPC_URL,
-    NEXT_PUBLIC_CAMPAIGN_CONTRACT_ID: process.env.NEXT_PUBLIC_CAMPAIGN_CONTRACT_ID,
-    NEXT_PUBLIC_VERIFIER_CONTRACT_ID: process.env.NEXT_PUBLIC_VERIFIER_CONTRACT_ID,
-    NEXT_PUBLIC_MOCK_TOKEN_CONTRACT_ID: process.env.NEXT_PUBLIC_MOCK_TOKEN_CONTRACT_ID
-  });
+type PublicStellarEnv = {
+  network: "localnet" | "testnet" | "mainnet";
+  campaignContractId: string;
+  verifierContractId: string;
+};
+
+export function readPublicStellarEnv(): PublicStellarEnv {
+  return {
+    network:
+      process.env.NEXT_PUBLIC_STELLAR_NETWORK === "testnet" ||
+      process.env.NEXT_PUBLIC_STELLAR_NETWORK === "mainnet"
+        ? process.env.NEXT_PUBLIC_STELLAR_NETWORK
+        : "localnet",
+    campaignContractId: process.env.NEXT_PUBLIC_CAMPAIGN_CONTRACT_ID ?? "",
+    verifierContractId: process.env.NEXT_PUBLIC_VERIFIER_CONTRACT_ID ?? ""
+  };
 }
 
-export function getPublicTestnetStatus(env: LumenStellarEnv): PublicTestnetStatus {
+export function getPublicTestnetStatus(env: PublicStellarEnv): PublicTestnetStatus {
   if (env.network !== "testnet") {
     return { kind: "local_demo", label: "Local demo only", tone: "amber" };
   }
 
-  if (!env.rpcUrl || !env.campaignContractId || !env.verifierContractId) {
-    return { kind: "not_configured", label: "Testnet not configured", tone: "amber" };
+  if (!env.campaignContractId || !env.verifierContractId) {
+    return { kind: "server_read", label: "Testnet state via server", tone: "cyan" };
   }
 
   return { kind: "connected", label: "Testnet connected", tone: "green" };

@@ -54,7 +54,7 @@ export async function GET() {
       {
         status: "error",
         message:
-          "Active deployment predates the compliance-root protocol. Run pnpm stellar:fresh-aidusd-campaign:testnet, or pnpm stellar:fresh-payout-campaign:testnet for native XLM fallback, after setting STELLAR_SOURCE_ACCOUNT."
+          "Active deployment predates the compliance-root protocol. Run pnpm judge:prepare-demo:testnet for a fresh AIDUSD demo campaign after setting the local testnet source account."
       },
       { status: 409 }
     );

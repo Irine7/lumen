@@ -359,22 +359,36 @@ function RealTestnetClaim() {
           : "cyan";
   const localVerificationLabel = proofResult
     ? proofResult.localVerification
-      ? "real Groth16 accepted"
-      : "real Groth16 rejected"
-    : "generate proof first";
-  const submissionLabel = claimResult
-    ? claimResult.txHash
-      ? "submitted to testnet"
-      : "blocked before transfer"
-    : "not submitted";
-  const claimResultLabel = claimResult
-    ? claimResult.status.replaceAll("_", " ")
-    : error
-      ? "proof blocked"
-      : "not run";
+      ? "passed (real Groth16 accepted)"
+      : "failed (real Groth16 rejected)"
+    : proofStatus === "failed"
+      ? "failed"
+      : "pending";
+  const recordingProofStatus = proofResult
+    ? "generated"
+    : proofStatus === "failed"
+      ? "failed"
+      : proofStatus === "idle"
+        ? "idle"
+        : "generating";
+  const submitReadiness = proofResult?.localVerification
+    ? "ready to submit"
+    : "disabled until local verification passes";
+  const claimResultLabel = claimResult ? (claimResult.ok ? "accepted" : "rejected") : "not submitted";
   const balanceDeltaLabel = claimResult?.campaignEscrowAfter
     ? `${claimResult.campaignEscrowBefore ?? "?"} -> ${claimResult.campaignEscrowAfter}`
     : "no balance delta yet";
+  const selectedRecordingStatus =
+    selected.id === "dora"
+      ? "eligible + compliant; Ready for valid claim"
+      : selected.id === "eve"
+        ? "eligible but not compliance-cleared; expected result: proof generation fails before submission"
+        : selected.id === "mallory"
+          ? "not eligible and not compliance-cleared; expected result: proof generation fails before submission"
+          : selected.eligible && selected.compliant
+            ? "eligible + compliant"
+            : "not ready for valid claim";
+  const generatedAfterProof = "will be generated after proof";
   const selectedScenario =
     selectedId === "dora"
       ? claimResult?.status === "duplicate_rejected"
@@ -446,16 +460,17 @@ function RealTestnetClaim() {
               <div className="rounded-lg border border-[#26313d] bg-[#080b0f] p-4">
                 <StatusDot tone={statusTone} label={selectedScenario} />
                 <dl className="mt-4">
-                  <KeyValue label="Proof status" value={proofStatus} />
+                  <KeyValue label="Selected recipient" value={`${selected.displayName}: ${selectedRecordingStatus}`} />
+                  <KeyValue label="Proof status" value={recordingProofStatus} />
                   <div data-testid="local-verification-status">
-                    <KeyValue label="Local verification status" value={localVerificationLabel} />
+                    <KeyValue label="Local verification" value={localVerificationLabel} />
                   </div>
-                  <KeyValue label="Testnet submission status" value={submissionLabel} />
+                  <KeyValue label="Submit readiness" value={submitReadiness} />
                   <KeyValue label="Claim result" value={claimResultLabel} />
                   <KeyValue label="Balance/escrow delta" value={balanceDeltaLabel} />
                   <KeyValue
                     label="Privacy note"
-                    value="Private witness stays in browser; relayer receives only proof/public inputs; payout address is public and proof-bound."
+                    value="Private witness stays in the browser worker. Relayer receives only proof bytes and public inputs."
                   />
                 </dl>
               </div>
@@ -466,7 +481,7 @@ function RealTestnetClaim() {
             <Panel>
               <PanelHeader
                 title="Real Testnet Claim"
-                description="Private witness data stays in this browser worker; the relayer receives only proof bytes and public inputs."
+                description="Private witness stays in the browser worker. Relayer receives only proof bytes and public inputs."
                 action={<VerifierStatusBadge status="real_on_chain" />}
               />
               <div className="grid gap-5 p-5">
@@ -499,10 +514,10 @@ function RealTestnetClaim() {
                         </div>
                         <p className="mt-2 text-xs leading-5 text-[#93a4ad]">
                           {recipient.eligible && recipient.compliant
-                            ? "Demo fixture: eligible + compliant"
+                            ? "Demo fixture: eligible + compliant. Ready for valid claim."
                             : recipient.eligible
-                              ? "Demo fixture: eligible but not compliant"
-                              : "Demo fixture: not eligible"}
+                              ? "Demo fixture: eligible but not compliance-cleared. Expected proof failure before submission."
+                              : "Demo fixture: not eligible and not compliance-cleared. Expected proof failure before submission."}
                         </p>
                       </button>
                     );
@@ -556,7 +571,7 @@ function RealTestnetClaim() {
                 <div className="flex flex-wrap gap-3">
                   <Button type="button" data-testid="generate-proof-button" onClick={handleGenerate}>
                     <Play className="h-4 w-4" />
-                    Generate proof bound to payout address
+                    Generate real browser Groth16 proof
                   </Button>
                   <Button
                     type="button"
@@ -603,28 +618,22 @@ function RealTestnetClaim() {
                 </div>
 
                 <div className="rounded-lg border border-[#26313d] bg-[#080b0f] p-4">
-                  <StatusDot tone={statusTone} label={`Proof status: ${proofStatus}`} />
+                  <StatusDot tone={statusTone} label={`Proof status: ${recordingProofStatus}`} />
                   <div className="mt-4 grid gap-0">
+                    <KeyValue label="Selected" value={`${selected.displayName}: ${selectedRecordingStatus}`} />
                     <KeyValue label="Verifier mode" value={verifierModeLabel(active)} />
                     <KeyValue label="Submission" value="Stellar testnet" />
-                    <KeyValue
-                      label="Local proof verification"
-                      value={
-                        proofResult
-                          ? proofResult.localVerification
-                            ? "real Groth16 accepted"
-                            : "real Groth16 rejected"
-                          : "generate proof first"
-                      }
-                    />
-                    <KeyValue label="Tx hash" value={claimResult?.txHash ?? "submit proof first"} />
+                    <KeyValue label="Local verification" value={localVerificationLabel} />
+                    <KeyValue label="Submit readiness" value={submitReadiness} />
+                    <KeyValue label="Claim result" value={claimResultLabel} />
+                    <KeyValue label="Tx hash" value={claimResult?.txHash ?? "not submitted"} />
                     <KeyValue label="Payout recipient" value={claimResult?.payoutRecipient ?? payoutAddress} />
                     <KeyValue
                       label="Recipient balance"
                       value={
                         claimResult?.recipientBalanceAfter
                           ? `${claimResult.recipientBalanceBefore ?? "?"} -> ${claimResult.recipientBalanceAfter}`
-                          : "submit proof first"
+                          : "not submitted"
                       }
                     />
                     <KeyValue
@@ -632,7 +641,7 @@ function RealTestnetClaim() {
                       value={
                         claimResult?.campaignEscrowAfter
                           ? `${claimResult.campaignEscrowBefore ?? "?"} -> ${claimResult.campaignEscrowAfter}`
-                          : "submit proof first"
+                          : "not submitted"
                       }
                     />
                   </div>
@@ -668,10 +677,10 @@ function RealTestnetClaim() {
                     value={proofResult?.publicInputs.complianceRoot ?? active.complianceRoot}
                   />
                   <KeyValue label="Policy hash" value={proofResult?.publicInputs.policyHash ?? active.policyHash} />
-                  <KeyValue label="Nullifier hash" value={proofResult?.publicInputs.nullifierHash} />
-                  <KeyValue label="Amount commitment" value={proofResult?.publicInputs.amountCommitment} />
-                  <KeyValue label="Recipient commitment" value={proofResult?.publicInputs.recipientCommitment} />
-                  <KeyValue label="Payout account hash" value={proofResult?.publicInputs.payoutAccountHash} />
+                  <KeyValue label="Nullifier hash" value={proofResult?.publicInputs.nullifierHash ?? generatedAfterProof} />
+                  <KeyValue label="Amount commitment" value={proofResult?.publicInputs.amountCommitment ?? generatedAfterProof} />
+                  <KeyValue label="Recipient commitment" value={proofResult?.publicInputs.recipientCommitment ?? generatedAfterProof} />
+                  <KeyValue label="Payout account hash" value={proofResult?.publicInputs.payoutAccountHash ?? generatedAfterProof} />
                 </dl>
                 {proofResult ? (
                   <CodeBlock

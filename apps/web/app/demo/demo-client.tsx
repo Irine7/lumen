@@ -3,13 +3,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
-  getCampaignEscrowBalance,
-  getCampaignStats,
-  type StellarReadResult,
-  type TestnetCampaignStats,
-  type TestnetEscrowBalance
-} from "@lumen-aid/stellar";
-import {
   CheckCircle2,
   Circle,
   FileCheck2,
@@ -20,10 +13,9 @@ import {
 } from "lucide-react";
 import { Button, KeyValue, Panel, PanelHeader, StatusDot } from "@/components/ui";
 import {
-  activeToStellarEnv,
-  fetchActiveTestnetConfig,
-  type ActiveTestnetConfigResult
-} from "@/lib/testnet-active";
+  fetchActiveTestnetState,
+  type ActiveTestnetState
+} from "@/lib/active-testnet-state";
 
 const PROGRESS_KEY = "lumen-demo-progress-v1";
 const AUDIT_PACKAGE_KEY = "lumen-demo-audit-package";
@@ -65,16 +57,6 @@ const panels = [
   }
 ];
 
-type CampaignReadState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | {
-      status: "loaded";
-      stats: StellarReadResult<TestnetCampaignStats>;
-      escrow: StellarReadResult<TestnetEscrowBalance>;
-    }
-  | { status: "error"; message: string };
-
 function readProgress(): boolean[] {
   if (typeof window === "undefined") {
     return steps.map(() => false);
@@ -96,14 +78,15 @@ function readProgress(): boolean[] {
   }
 }
 
+function liveValue(value: number | undefined, unavailableReason: string): string {
+  return value === undefined ? unavailableReason : value.toString();
+}
+
 export function DemoClient() {
-  const [activeResult, setActiveResult] = useState<ActiveTestnetConfigResult>({
-    status: "not_configured",
-    message: "Loading active testnet deployment"
-  });
+  const [testnetState, setTestnetState] = useState<ActiveTestnetState | null>(null);
+  const [stateLoading, setStateLoading] = useState(false);
   const [progress, setProgress] = useState<boolean[]>(() => steps.map(() => false));
   const [hasAuditPackage, setHasAuditPackage] = useState(false);
-  const [campaignRead, setCampaignRead] = useState<CampaignReadState>({ status: "idle" });
 
   useEffect(() => {
     setProgress(readProgress());
@@ -111,15 +94,43 @@ export function DemoClient() {
   }, []);
 
   useEffect(() => {
-    fetchActiveTestnetConfig()
-      .then(setActiveResult)
-      .catch((error) =>
-        setActiveResult({
-          status: "error",
-          message: error instanceof Error ? error.message : String(error)
-        })
-      );
+    refreshState().catch(() => undefined);
   }, []);
+
+  async function refreshState() {
+    setStateLoading(true);
+    try {
+      setTestnetState(await fetchActiveTestnetState());
+    } catch (error) {
+      setTestnetState({
+        ok: false,
+        mode: "error",
+        error: error instanceof Error ? error.message : String(error),
+        deployment: {
+          assetMode: "",
+          assetCode: "",
+          assetContractId: "",
+          campaignContractId: "",
+          verifierContractId: "",
+          campaignId: "",
+          eligibilityRoot: "",
+          complianceRoot: "",
+          policyHash: "",
+          verificationKeyHash: "",
+          budget: "",
+          escrowFunded: "",
+          perRecipientCap: ""
+        },
+        computed: {
+          campaignState: "unread",
+          readyForFullDemo: false,
+          statusMessage: error instanceof Error ? error.message : String(error)
+        }
+      });
+    } finally {
+      setStateLoading(false);
+    }
+  }
 
   function setStep(index: number, value: boolean) {
     const next = progress.map((current, currentIndex) =>
@@ -135,100 +146,72 @@ export function DemoClient() {
     window.localStorage.setItem(PROGRESS_KEY, JSON.stringify(next));
   }
 
-  const active = activeResult.status === "ready" ? activeResult.active : null;
-
-  useEffect(() => {
-    if (!active) {
-      setCampaignRead({ status: "idle" });
-      return;
-    }
-
-    let cancelled = false;
-    setCampaignRead({ status: "loading" });
-    const env = activeToStellarEnv(active);
-    Promise.all([getCampaignStats(env), getCampaignEscrowBalance(env)])
-      .then(([stats, escrow]) => {
-        if (!cancelled) {
-          setCampaignRead({ status: "loaded", stats, escrow });
-        }
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setCampaignRead({
-            status: "error",
-            message: error instanceof Error ? error.message : String(error)
-          });
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [active]);
-
-  const stats =
-    campaignRead.status === "loaded" && campaignRead.stats.status === "ready"
-      ? campaignRead.stats.data
-      : null;
-  const escrow =
-    campaignRead.status === "loaded" && campaignRead.escrow.status === "ready"
-      ? campaignRead.escrow.data
-      : null;
-  const claimCount = stats?.claimCount ?? null;
-  const remainingEscrow = escrow?.balance ?? null;
+  const active = testnetState?.ok ? testnetState.deployment : null;
+  const live = testnetState?.mode === "live" ? testnetState.live : undefined;
+  const unavailableReason =
+    testnetState?.mode === "metadata_only"
+      ? `unavailable: ${testnetState.error ?? "live read failed"}`
+      : testnetState?.mode === "error"
+        ? `unavailable: ${testnetState.error ?? "state read failed"}`
+        : stateLoading
+          ? "reading"
+          : "unavailable";
   const campaignState = useMemo(() => {
-    if (claimCount === null) {
+    if (!testnetState) {
       return {
-        label: campaignRead.status === "loading" ? "Campaign state: reading" : "Campaign state: unread",
-        value: campaignRead.status === "loading" ? "reading" : "unread",
+        label: stateLoading ? "Campaign state: reading" : "Campaign state: unread",
+        value: stateLoading ? "reading" : "unread",
         tone: "amber" as const,
-        readiness: "Claim count is not readable yet.",
-        recipientStatus: "Per-recipient claim status is not shown without a direct contract read."
+        readiness: stateLoading ? "Reading active testnet state." : "Live state has not been loaded yet.",
+        recipientStatus:
+          "Per-recipient claim status is inferred from aggregate state and demo fixture only."
       };
     }
 
-    if (claimCount === 0) {
-      return {
-        label: "Campaign state: pristine",
-        value: "pristine",
-        tone: "green" as const,
-        readiness: "Ready for full demo sequence",
-        recipientStatus: "Only aggregate claim count is readable here; no recipient has claimed when claim count is 0."
-      };
-    }
-
-    const consumed =
-      (stats && BigInt(stats.remainingBudget) <= 0n) ||
-      (remainingEscrow !== null && BigInt(remainingEscrow) <= 0n);
+    const state = testnetState.computed.campaignState;
+    const liveUnavailable = testnetState.mode === "metadata_only" || testnetState.mode === "error";
 
     return {
-      label: consumed ? "Campaign state: consumed" : "Campaign state: partially used",
-      value: consumed ? "consumed" : "partially used",
-      tone: consumed ? ("red" as const) : ("amber" as const),
-      readiness:
-        "This campaign has already been used. Run pnpm judge:prepare-demo:testnet for a pristine demo.",
+      label:
+        state === "pristine"
+          ? "Campaign state: pristine"
+          : state === "partially_used"
+            ? "Campaign state: partially used"
+            : state === "consumed"
+              ? "Campaign state: consumed"
+              : `Campaign state: unread (${testnetState.error ?? "live read unavailable"})`,
+      value: state,
+      tone:
+        state === "pristine"
+          ? ("green" as const)
+          : testnetState.mode === "error"
+            ? ("red" as const)
+            : ("amber" as const),
+      readiness: liveUnavailable
+        ? testnetState.computed.statusMessage
+        : testnetState.computed.statusMessage,
       recipientStatus:
-        "Only aggregate claim count is readable here; per-recipient claim status is not shown."
+        "Per-recipient claim status is inferred from aggregate state and demo fixture only."
     };
-  }, [campaignRead.status, claimCount, remainingEscrow, stats]);
+  }, [stateLoading, testnetState]);
   const completed = progress.filter(Boolean).length;
   const panelStatus = useMemo(() => {
     if (!active) {
       return {
-        Operator: "Not configured",
-        Recipient: "Not configured",
-        Donor: "Not configured",
+        Operator: stateLoading ? "Reading state" : "Unavailable",
+        Recipient: stateLoading ? "Reading state" : "Unavailable",
+        Donor: stateLoading ? "Reading state" : "Unavailable",
         Auditor: hasAuditPackage ? "Package available" : "Waiting for package"
       };
     }
 
     return {
-      Operator: `${active.assetCode ?? "Asset"} campaign ready`,
+      Operator: `${active.assetCode || "Asset"} campaign ready`,
       Recipient: "Real Testnet Claim ready",
-      Donor: "Live AIDUSD state default",
+      Donor: testnetState?.mode === "live" ? "Live AIDUSD state ready" : "Metadata loaded",
       Auditor: hasAuditPackage ? "Package available" : "Waiting for package"
     };
-  }, [active, hasAuditPackage]);
+  }, [active, hasAuditPackage, stateLoading, testnetState?.mode]);
 
   return (
     <div data-testid="demo-command-center" className="grid gap-6">
@@ -237,36 +220,67 @@ export function DemoClient() {
           title="Demo command center"
           description="A guided launcher for the validated product flow."
           action={
-            <Button type="button" variant="secondary" onClick={resetProgress}>
-              <RefreshCw className="h-4 w-4" />
-              Reset progress
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="secondary" onClick={() => refreshState().catch(() => undefined)}>
+                <RefreshCw className="h-4 w-4" />
+                Refresh state
+              </Button>
+              <Button type="button" variant="secondary" onClick={resetProgress}>
+                <RefreshCw className="h-4 w-4" />
+                Reset progress
+              </Button>
+            </div>
           }
         />
         <div className="grid gap-5 p-5 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="rounded-lg border border-[#26313d] bg-[#10161d] p-4">
             <StatusDot
-              tone={active ? "green" : activeResult.status === "error" ? "red" : "amber"}
-              label={active ? "Active AIDUSD testnet deployment configured" : "Active testnet not configured"}
+              tone={
+                testnetState?.mode === "live"
+                  ? "green"
+                  : testnetState?.mode === "error"
+                    ? "red"
+                    : active
+                      ? "amber"
+                      : "amber"
+              }
+              label={
+                active
+                  ? "Active AIDUSD testnet deployment configured"
+                  : stateLoading
+                    ? "Reading active AIDUSD testnet deployment"
+                    : "Active testnet deployment unavailable"
+              }
             />
             <dl className="mt-4">
-              <KeyValue label="Asset" value={active?.assetCode ?? "not configured"} />
-              <KeyValue label="Campaign contract" value={active?.campaignContractId ?? "not configured"} />
-              <KeyValue label="Verifier mode" value={active?.verifierInfo.mode ?? "not configured"} />
-              <KeyValue label="Campaign state" value={campaignState.value} />
-              <KeyValue label="Claim count" value={claimCount === null ? "unread" : claimCount.toString()} />
-              <KeyValue label="Remaining escrow" value={remainingEscrow ?? "unread"} />
-              <KeyValue label="Eligibility root" value={active?.eligibilityRoot ?? "not configured"} />
-              <KeyValue label="Compliance root" value={active?.complianceRoot ?? "not configured"} />
+              <KeyValue label="Asset" value={active?.assetCode || "not loaded"} />
+              <KeyValue label="Campaign contract" value={active?.campaignContractId || "not loaded"} />
               <KeyValue
-                label="Status message"
-                value={activeResult.status === "ready" ? "ready" : activeResult.message}
+                label="Verifier mode"
+                value={live?.verifierMode ?? (active ? "metadata loaded, verifier live read optional" : "not loaded")}
+              />
+              <KeyValue label="Campaign state" value={campaignState.value} />
+              <KeyValue label="Claim count" value={liveValue(live?.claimCount, unavailableReason)} />
+              <KeyValue label="Total claimed" value={liveValue(live?.totalClaimed, unavailableReason)} />
+              <KeyValue label="Remaining budget" value={liveValue(live?.remainingBudget, unavailableReason)} />
+              <KeyValue label="Remaining escrow" value={liveValue(live?.escrowBalance, unavailableReason)} />
+              <KeyValue label="Eligibility root" value={active?.eligibilityRoot || "not loaded"} />
+              <KeyValue label="Compliance root" value={active?.complianceRoot || "not loaded"} />
+              <KeyValue
+                label="Status"
+                value={testnetState?.computed.statusMessage ?? (stateLoading ? "reading" : "not loaded")}
               />
             </dl>
             <div className="mt-4 rounded-lg border border-[#26313d] bg-[#080b0f] p-3">
-              <StatusDot tone={campaignState.tone} label={campaignState.label} />
+              {testnetState?.mode === "metadata_only" ? (
+                <StatusDot tone="amber" label="Campaign metadata loaded" />
+              ) : (
+                <StatusDot tone={campaignState.tone} label={campaignState.label} />
+              )}
               <p className="mt-2 text-sm leading-6 text-[#d8e7ec]">
-                {campaignState.readiness}
+                {testnetState?.mode === "metadata_only"
+                  ? `Live stats unavailable: ${testnetState.error ?? "unknown read failure"}`
+                  : campaignState.readiness}
               </p>
               <p className="mt-2 text-xs leading-5 text-[#93a4ad]">
                 {campaignState.recipientStatus}
@@ -311,7 +325,11 @@ export function DemoClient() {
                   <p className="mt-2 text-sm leading-6 text-[#93a4ad]">{panel.action}</p>
                 </div>
                 <StatusDot
-                  tone={panelStatus[panel.title as keyof typeof panelStatus].includes("Not configured") ? "amber" : "green"}
+                  tone={
+                    /Unavailable|Reading/.test(panelStatus[panel.title as keyof typeof panelStatus])
+                      ? "amber"
+                      : "green"
+                  }
                   label={panelStatus[panel.title as keyof typeof panelStatus]}
                 />
                 <Link href={panel.href}>
