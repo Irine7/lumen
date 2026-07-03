@@ -244,7 +244,7 @@ function contractErrorStatus(result: CommandResult): {
   if (text.includes("Error(Contract, #11)") || text.includes('"code":11')) {
     return { status: "invalid_rejected", message: "Invalid proof rejected" };
   }
-  return { status: "simulation_rejected", message: "Claim simulation rejected" };
+  return { status: "validation_rejected", message: "Claim validation rejected" };
 }
 
 function parseTxHash(result: CommandResult): string | null {

@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Eye, FileCheck2, LockKeyhole, RefreshCw, Sparkles } from "lucide-react";
+import { Eye, FileCheck2, LockKeyhole, RefreshCw } from "lucide-react";
 import {
   Button,
-  CodeBlock,
   DisclosureBanner,
   EmptyState,
   KeyValue,
@@ -27,6 +26,7 @@ type AuditPackage = {
   auditCommitment?: string;
   proofVerified: boolean;
   recipientDisclosure?: {
+    recipientName?: string;
     demoRecipientName?: string;
     eligibilityReason?: string;
     complianceStatus?: string;
@@ -39,28 +39,6 @@ type AuditPackage = {
 
 const STORAGE_KEY = "lumen-demo-audit-package";
 const NO_PACKAGE = "No package loaded";
-const DEMO_PREVIEW_PACKAGE: AuditPackage = {
-  campaignId: "preview-demo-package",
-  claimTxHash: "preview-no-claim-submitted",
-  nullifierHash: "preview-generated-after-claim",
-  amount: "100",
-  asset: "AIDUSD",
-  payoutAccountHash: "preview-generated-after-proof",
-  eligibilityRoot: "preview-active-eligibility-root",
-  complianceRoot: "preview-active-compliance-root",
-  policyHash: "preview-active-policy-hash",
-  auditCommitment: "preview-audit-commitment",
-  proofVerified: false,
-  recipientDisclosure: {
-    demoRecipientName: "Dora",
-    eligibilityReason: "Food and essentials emergency grant",
-    complianceStatus: "cleared",
-    payoutAddress: "preview-payout-address"
-  },
-  demoOnly: true,
-  previewOnly: true,
-  createdAt: "preview"
-};
 
 function parsePackage(value: string): AuditPackage | null {
   try {
@@ -93,13 +71,6 @@ export function AuditorClient() {
     setError(parsed ? null : "Stored package is not valid disclosure JSON.");
   }
 
-  function loadPreviewPackage() {
-    const preview = JSON.stringify(DEMO_PREVIEW_PACKAGE, null, 2);
-    setRawPackage(preview);
-    setAuditPackage(DEMO_PREVIEW_PACKAGE);
-    setError(null);
-  }
-
   function parseTypedPackage() {
     const parsed = parsePackage(rawPackage);
     setAuditPackage(parsed);
@@ -114,11 +85,7 @@ export function AuditorClient() {
     }
   }, []);
 
-  const packageType = auditPackage
-    ? auditPackage.previewOnly
-      ? "Preview only - no live claim loaded yet"
-      : "Real claim package from this browser"
-    : NO_PACKAGE;
+  const packageType = auditPackage ? "Claim package loaded" : NO_PACKAGE;
   const packageValue = (
     value: string | boolean | undefined | null,
     missing = "Not disclosed"
@@ -138,24 +105,19 @@ export function AuditorClient() {
         <div className="grid gap-6 p-6 lg:grid-cols-[1fr_auto] lg:items-start lg:p-8">
           <div>
             <div className="flex flex-wrap gap-2">
-              <StatusPill tone="amber">Demo-only selective disclosure</StatusPill>
               <StatusPill tone={auditPackage ? "green" : "neutral"}>{packageType}</StatusPill>
             </div>
             <h1 className="mt-5 text-balance text-4xl font-semibold leading-tight text-white sm:text-5xl">
               Auditor disclosure
             </h1>
             <p className="mt-4 max-w-3xl text-lg leading-8 text-[#bac9cf]">
-              Demo-only selective disclosure for scoped review.
+              Selective disclosure for scoped review.
             </p>
           </div>
           <div className="flex flex-wrap gap-2 lg:justify-end">
             <Button type="button" variant="secondary" onClick={loadStoredPackage}>
               <RefreshCw className="h-4 w-4" />
-              Load local package
-            </Button>
-            <Button type="button" variant="secondary" onClick={loadPreviewPackage}>
-              <Sparkles className="h-4 w-4" />
-              Load preview package
+              Load claim package
             </Button>
             <Button type="button" onClick={parseTypedPackage}>
               <FileCheck2 className="h-4 w-4" />
@@ -165,25 +127,14 @@ export function AuditorClient() {
         </div>
       </Panel>
 
-      <DisclosureBanner title="Demo-only selective disclosure" tone="amber">
-        Not production view keys. No real KYC or sanctions-provider integration is implied.
-      </DisclosureBanner>
-
       <div data-testid="auditor-package-status">
         {!auditPackage ? (
           <EmptyState title="No disclosure package loaded yet.">
-            After a successful Dora claim, load the local package to inspect the auditor-only demo
-            evidence. A clearly labeled preview package is available for recording the empty-state
-            flow.
+            After a successful claim, load the claim package to inspect scoped auditor evidence.
           </EmptyState>
-        ) : auditPackage.previewOnly ? (
-          <DisclosureBanner title="Preview only - no live claim loaded yet" tone="cyan">
-            This package is sample evidence for the video. It is not generated from a live Dora
-            claim in this browser session.
-          </DisclosureBanner>
         ) : (
           <DisclosureBanner title="Disclosure package loaded" tone="cyan">
-            Local demo evidence is available for scoped auditor review.
+            Claim evidence is available for scoped auditor review.
           </DisclosureBanner>
         )}
       </div>
@@ -225,14 +176,17 @@ export function AuditorClient() {
         <Panel>
           <PanelHeader
             title="Auditor selective view"
-            description="Auditor-only demo evidence; not public by default."
+            description="Auditor-only evidence; not public by default."
             action={<Eye className="h-5 w-5 text-[#78f1b2]" />}
           />
           {auditPackage ? (
             <dl className="p-5">
               <KeyValue
-                label="Demo recipient"
-                value={packageValue(auditPackage.recipientDisclosure?.demoRecipientName)}
+                label="Recipient"
+                value={packageValue(
+                  auditPackage.recipientDisclosure?.recipientName ??
+                    auditPackage.recipientDisclosure?.demoRecipientName
+                )}
               />
               <KeyValue
                 label="Eligibility reason"
@@ -247,8 +201,6 @@ export function AuditorClient() {
                 value={packageValue(auditPackage.recipientDisclosure?.payoutAddress)}
               />
               <KeyValue label="Proof verified" value={String(auditPackage.proofVerified)} />
-              <KeyValue label="Demo-only package" value={String(Boolean(auditPackage.demoOnly))} />
-              <KeyValue label="Preview package" value={String(Boolean(auditPackage.previewOnly))} />
             </dl>
           ) : (
             <div className="p-5">
@@ -266,10 +218,9 @@ export function AuditorClient() {
             value={rawPackage}
             onChange={(event) => setRawPackage(event.target.value)}
             className="min-h-40 rounded-xl border border-white/10 bg-[#071012] p-3 font-mono text-xs leading-5 text-white outline-none focus:border-[#69e6cf]"
-            placeholder="Paste a demo disclosure package JSON here, or load the local package after a successful claim."
+            placeholder="Paste a disclosure package JSON here, or load the claim package after a successful claim."
             spellCheck={false}
           />
-          {auditPackage ? <CodeBlock value={auditPackage} /> : null}
         </div>
       </TechnicalDetails>
     </div>

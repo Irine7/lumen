@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lumen Product Flow Verification Report</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #071014;
+        --panel: #101b22;
+        --panel-2: #14232b;
+        --line: rgba(255, 255, 255, 0.12);
+        --text: #edf8f8;
+        --muted: #a7bac1;
+        --cyan: #68e5d0;
+        --green: #7af3ae;
+        --amber: #ffd36e;
+        --red: #ff8585;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 18% -10%, rgba(104, 229, 208, 0.17), transparent 36rem),
+          linear-gradient(135deg, #071014, #0a1218 48%, #05080b);
+        color: var(--text);
+        font: 15px/1.55 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      a {
+        color: var(--cyan);
+        text-decoration: none;
+      }
+
+      a:hover {
+        text-decoration: underline;
+      }
+
+      .page {
+        width: min(1180px, calc(100% - 40px));
+        margin: 0 auto;
+        padding: 36px 0 64px;
+      }
+
+      .hero {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: rgba(16, 27, 34, 0.86);
+        overflow: hidden;
+        box-shadow: 0 28px 90px rgba(0, 0, 0, 0.32);
+      }
+
+      .hero-grid {
+        display: grid;
+        grid-template-columns: 1fr 0.86fr;
+        gap: 28px;
+        padding: 34px;
+        align-items: center;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        gap: 8px;
+        align-items: center;
+        border: 1px solid rgba(104, 229, 208, 0.34);
+        border-radius: 999px;
+        padding: 7px 12px;
+        color: #c9fff6;
+        background: rgba(104, 229, 208, 0.08);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        line-height: 1.08;
+      }
+
+      h1 {
+        margin-top: 22px;
+        font-size: clamp(40px, 7vw, 78px);
+        letter-spacing: 0;
+      }
+
+      .lead {
+        max-width: 760px;
+        margin: 20px 0 0;
+        color: var(--muted);
+        font-size: 18px;
+      }
+
+      .hero-shot {
+        display: block;
+        width: 100%;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        background: #071014;
+      }
+
+      .meta {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        border-top: 1px solid var(--line);
+      }
+
+      .meta div {
+        padding: 18px 20px;
+        border-right: 1px solid var(--line);
+      }
+
+      .meta div:last-child {
+        border-right: 0;
+      }
+
+      .label {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      .value {
+        display: block;
+        margin-top: 6px;
+        color: var(--text);
+        font-weight: 700;
+        word-break: break-word;
+      }
+
+      section {
+        margin-top: 28px;
+      }
+
+      .section-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: end;
+        margin-bottom: 14px;
+      }
+
+      .section-head p {
+        margin: 8px 0 0;
+        color: var(--muted);
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .grid-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .grid-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: rgba(16, 27, 34, 0.84);
+        overflow: hidden;
+      }
+
+      .panel-pad {
+        padding: 20px;
+      }
+
+      .kpi {
+        min-height: 132px;
+      }
+
+      .kpi .value {
+        font-size: 28px;
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid rgba(122, 243, 174, 0.34);
+        border-radius: 999px;
+        padding: 6px 10px;
+        background: rgba(122, 243, 174, 0.08);
+        color: #d7ffe7;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .status.amber {
+        border-color: rgba(255, 211, 110, 0.34);
+        background: rgba(255, 211, 110, 0.08);
+        color: #ffe7a6;
+      }
+
+      .status.red {
+        border-color: rgba(255, 133, 133, 0.34);
+        background: rgba(255, 133, 133, 0.08);
+        color: #ffc4c4;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 13px 14px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-weight: 700;
+      }
+
+      td {
+        color: #dbe9ed;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      code {
+        color: #c9fff6;
+        font-family: "SFMono-Regular", Consolas, monospace;
+        font-size: 12px;
+        word-break: break-all;
+      }
+
+      .shot {
+        display: grid;
+        gap: 0;
+      }
+
+      .shot img {
+        display: block;
+        width: 100%;
+        border-bottom: 1px solid var(--line);
+        background: #071014;
+      }
+
+      .caption {
+        padding: 16px;
+      }
+
+      .caption h3 {
+        font-size: 18px;
+      }
+
+      .caption p {
+        margin: 8px 0 0;
+        color: var(--muted);
+      }
+
+      .steps {
+        counter-reset: step;
+      }
+
+      .step {
+        display: grid;
+        grid-template-columns: 44px 1fr;
+        gap: 14px;
+        padding: 18px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .step:last-child {
+        border-bottom: 0;
+      }
+
+      .step:before {
+        counter-increment: step;
+        content: counter(step);
+        display: grid;
+        place-items: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: rgba(104, 229, 208, 0.12);
+        color: #c9fff6;
+        font-weight: 800;
+      }
+
+      .step h3 {
+        font-size: 17px;
+      }
+
+      .step p {
+        margin: 6px 0 0;
+        color: var(--muted);
+      }
+
+      .footer {
+        margin-top: 28px;
+        color: var(--muted);
+        text-align: center;
+      }
+
+      @media (max-width: 900px) {
+        .hero-grid,
+        .grid-2,
+        .grid-3,
+        .meta {
+          grid-template-columns: 1fr;
+        }
+
+        .meta div {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+
+        .meta div:last-child {
+          border-bottom: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="hero">
+        <div class="hero-grid">
+          <div>
+            <span class="eyebrow">Stellar testnet verification report</span>
+            <h1>Lumen Product Flow</h1>
+            <p class="lead">
+              End-to-end browser run covering campaign readiness, recipient selection,
+              browser Groth16 Z-approval, Stellar testnet claim submission, duplicate
+              nullifier rejection, negative recipient gates, donor accounting, and auditor
+              selective disclosure.
+            </p>
+          </div>
+          <img class="hero-shot" src="screenshots/12-command-center-after-claim.png" alt="Command center after claim" />
+        </div>
+        <div class="meta">
+          <div>
+            <span class="label">Run date</span>
+            <span class="value">2026-07-03</span>
+          </div>
+          <div>
+            <span class="label">Network</span>
+            <span class="value">Stellar testnet</span>
+          </div>
+          <div>
+            <span class="label">Claim recipient</span>
+            <span class="value">Alice</span>
+          </div>
+          <div>
+            <span class="label">On-chain tx</span>
+            <span class="value"><a href="https://stellar.expert/explorer/testnet/tx/249c38127f5709fb0049644b715f93ddd556171e67ccaa4e3cb691a18551435f">249c3812...8551435f</a></span>
+          </div>
+        </div>
+      </header>
+
+      <section>
+        <div class="section-head">
+          <div>
+            <h2>Result Summary</h2>
+            <p>Observed from the running browser app and verified against Stellar testnet.</p>
+          </div>
+          <span class="status">Claim accepted on-chain</span>
+        </div>
+        <div class="grid grid-3">
+          <div class="panel panel-pad kpi">
+            <span class="label">Browser Z-approval</span>
+            <span class="value">Passed</span>
+            <p>real Groth16 proof accepted before submit.</p>
+          </div>
+          <div class="panel panel-pad kpi">
+            <span class="label">AIDUSD sent</span>
+            <span class="value">125</span>
+            <p>Claim was bound to Alice payout account hash.</p>
+          </div>
+          <div class="panel panel-pad kpi">
+            <span class="label">Post-run state</span>
+            <span class="value">225 claimed</span>
+            <p>Claim count 2, remaining campaign budget 775 AIDUSD.</p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <div>
+            <h2>On-chain Evidence</h2>
+            <p>Transaction and contract identifiers captured from the app and confirmed via Horizon.</p>
+          </div>
+        </div>
+        <div class="panel">
+          <table>
+            <tbody>
+              <tr>
+                <th>Accepted claim tx</th>
+                <td>
+                  <a href="https://stellar.expert/explorer/testnet/tx/249c38127f5709fb0049644b715f93ddd556171e67ccaa4e3cb691a18551435f">Stellar Expert</a>
+                  <br />
+                  <a href="https://horizon-testnet.stellar.org/transactions/249c38127f5709fb0049644b715f93ddd556171e67ccaa4e3cb691a18551435f">Horizon API</a>
+                  <br />
+                  <code>249c38127f5709fb0049644b715f93ddd556171e67ccaa4e3cb691a18551435f</code>
+                </td>
+              </tr>
+              <tr>
+                <th>Horizon status</th>
+                <td>successful=true, ledger=3416305, created_at=2026-07-03T16:35:58Z, operation_count=1</td>
+              </tr>
+              <tr>
+                <th>Source account</th>
+                <td><a href="https://stellar.expert/explorer/testnet/account/GCIIAVHQXFF4EEL4QPDOF2WX5C3RJFTECBNZJSM32O4P4Z3QTSQKFIIU"><code>GCIIAVHQXFF4EEL4QPDOF2WX5C3RJFTECBNZJSM32O4P4Z3QTSQKFIIU</code></a></td>
+              </tr>
+              <tr>
+                <th>Campaign contract</th>
+                <td><a href="https://stellar.expert/explorer/testnet/contract/CD6BWJYNDJPSK4LDKICLSV4IDN7XXHNE3BYA4V7KYMPA4SNAYBQ4UFE4"><code>CD6BWJYNDJPSK4LDKICLSV4IDN7XXHNE3BYA4V7KYMPA4SNAYBQ4UFE4</code></a></td>
+              </tr>
+              <tr>
+                <th>Verifier contract</th>
+                <td><a href="https://stellar.expert/explorer/testnet/contract/CCRODRGI5YO73MBYDN2ITFQETE2I6V3NVX7S7YVXTZQ4XJ3UOUY4SUGI"><code>CCRODRGI5YO73MBYDN2ITFQETE2I6V3NVX7S7YVXTZQ4XJ3UOUY4SUGI</code></a></td>
+              </tr>
+              <tr>
+                <th>AIDUSD contract</th>
+                <td><a href="https://stellar.expert/explorer/testnet/contract/CBRLWLJH3X2JPIB5UEUXHXDE6KKEZ3MCCVAT6STRAKP2SM52VR5DQTLQ"><code>CBRLWLJH3X2JPIB5UEUXHXDE6KKEZ3MCCVAT6STRAKP2SM52VR5DQTLQ</code></a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <div>
+            <h2>Scenario Timeline</h2>
+            <p>What to open, run, and click in the product walkthrough.</p>
+          </div>
+        </div>
+        <div class="panel steps">
+          <div class="step">
+            <div>
+              <h3>Open Home and enter the app</h3>
+              <p>Confirm the Lumen product entry point and open the command center.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <h3>Open Campaigns</h3>
+              <p>Confirm the active AIDUSD campaign, verifier mode, escrow, roots, and policy hash.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <h3>Open Claims</h3>
+              <p>Select Alice, keep the verified payout address, and generate the browser Groth16 proof.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <h3>Check Z-approval</h3>
+              <p>Wait for browser verification to show passed and submit readiness to show ready.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <h3>Submit payout claim</h3>
+              <p>Submit to Stellar testnet and capture the accepted tx hash.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <h3>Run rejection cases</h3>
+              <p>Retry the same nullifier for duplicate rejection, then test Eve and Mallory proof gates.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <h3>Open Donors and Auditor</h3>
+              <p>Confirm updated aggregate accounting and inspect the disclosure package.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <div>
+            <h2>Captured Screens</h2>
+            <p>All screenshots were taken directly from Chrome against the running app.</p>
+          </div>
+        </div>
+        <div class="grid grid-2">
+          <figure class="panel shot">
+            <img src="screenshots/01-home.png" alt="Home screen" />
+            <figcaption class="caption">
+              <h3>1. Home</h3>
+              <p>Product entry point with app navigation.</p>
+            </figcaption>
+          </figure>
+          <figure class="panel shot">
+            <img src="screenshots/02-operator.png" alt="Campaign operator screen" />
+            <figcaption class="caption">
+              <h3>2. Campaign readiness</h3>
+              <p>Operator-facing campaign state, escrow, verifier, and root metadata.</p>
+            </figcaption>
+          </figure>
+          <figure class="panel shot">
+            <img src="screenshots/03-command-center.png" alt="Command center before claim" />
+            <figcaption class="caption">
+              <h3>3. Command center before claim</h3>
+              <p>Central workflow view before the Alice claim is submitted.</p>
+            </figcaption>
+          </figure>
+          <figure class="panel shot">
+            <img src="screenshots/04-donor-before-claim.png" alt="Donor screen before claim" />
+            <figcaption class="caption">
+              <h3>4. Donor view before claim</h3>
+              <p>Public accounting before the new payout is sent.</p>
+            </figcaption>
+          </figure>
+          <figure class="panel shot">
+            <img src="screenshots/05-recipient-alice-selected.png" alt="Alice selected on claim screen" />
+            <figcaption class="caption">
+              <h3>5. Recipient selected</h3>
+              <p>Alice is selected with a verified payout address and amount 125 AIDUSD.</p>
+            </figcaption>
+          </figure>
+          <figure class="panel shot">
+            <img src="screenshots/06-z-approval-browser-verification.png" alt="Browser verification passed" />
+            <figcaption class="caption">
+              <h3>6. Z-approval</h3>
+              <p>Browser verification passed and submit readiness is ready.</p>
+            </figcaption>
+          </figure>
+          <figure class="panel shot">
+            <img src="screenshots/07-on-chain-claim-accepted.png" alt="Accepted on-chain claim" />
+            <figcaption class="caption">
+              <h3>7. On-chain claim accepted</h3>
+              <p>The app displays the accepted result and tx hash.</p>
+            </figcaption>
+          </figure>
+          <figure class="panel shot">
+            <img src="screenshots/08-duplicate-rejected.png" alt="Duplicate claim rejected" />
+            <figcaption class="caption">
+              <h3>8. Duplicate rejected</h3>
+              <p>The same nullifier is rejected and no new tx hash is produced.</p>
+            </figcaption>
+          </figure>
+          <figure class="panel shot">
+            <img src="screenshots/09-eve-proof-rejected.png" alt="Eve proof rejected" />
+            <figcaption class="caption">
+              <h3>9. Eve compliance gate</h3>
+              <p>Browser proof generation fails because Eve is outside the compliance clearance tree.</p>
+            </figcaption>
+          </figure>
+          <figure class="panel shot">
+            <img src="screenshots/10-mallory-proof-rejected.png" alt="Mallory proof rejected" />
+            <figcaption class="caption">
+              <h3>10. Mallory eligibility gate</h3>
+              <p>Browser proof generation fails because Mallory is outside the eligibility tree.</p>
+            </figcaption>
+          </figure>
+          <figure class="panel shot">
+            <img src="screenshots/11-donor-after-claim.png" alt="Donor screen after claim" />
+            <figcaption class="caption">
+              <h3>11. Donor view after claim</h3>
+              <p>Aggregate accounting updates after Alice receives 125 AIDUSD.</p>
+            </figcaption>
+          </figure>
+          <figure class="panel shot">
+            <img src="screenshots/13-auditor-disclosure-package.png" alt="Auditor disclosure package" />
+            <figcaption class="caption">
+              <h3>12. Auditor disclosure</h3>
+              <p>Scoped auditor package shows tx, nullifier, roots, policy hash, payout hash, and proofVerified=true.</p>
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <div>
+            <h2>Disclosure Package Evidence</h2>
+            <p>The auditor view was loaded from the browser claim package created by the accepted Alice claim.</p>
+          </div>
+        </div>
+        <div class="panel">
+          <table>
+            <tbody>
+              <tr>
+                <th>Recipient</th>
+                <td>Alice</td>
+              </tr>
+              <tr>
+                <th>Amount</th>
+                <td>125 AIDUSD</td>
+              </tr>
+              <tr>
+                <th>Nullifier hash</th>
+                <td><code>0x20ea24634f47183fda43cae33b1d7a21e3ab490776c2c88e37360582ce93f381</code></td>
+              </tr>
+              <tr>
+                <th>Payout account hash</th>
+                <td><code>0x00bd1e36efddd0f63fae516694afb5e18bd3f09a00063229997bd53b2f6bf084</code></td>
+              </tr>
+              <tr>
+                <th>Eligibility root</th>
+                <td><code>0x2b070984377730cd19cb263f65a7ace043bd63cb3e45fa474017e9b52b08fd7e</code></td>
+              </tr>
+              <tr>
+                <th>Compliance root</th>
+                <td><code>0x0a2138537cf03c3f72667f1a3436b6599b77363f681e4e44df5cb7f11fca665e</code></td>
+              </tr>
+              <tr>
+                <th>Policy hash</th>
+                <td><code>0x1f0f1c8d9e2215a08b69345882c8850b778b85f0346f02c7c2a610f51d41aa21</code></td>
+              </tr>
+              <tr>
+                <th>Audit commitment</th>
+                <td><code>0xe59a8c7e7193aebfb5375372046f7a7d32e0914ea752db93bfe50b967362b073</code></td>
+              </tr>
+              <tr>
+                <th>Proof verified</th>
+                <td>true</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <p class="footer">Generated from the live Chrome walkthrough and Stellar testnet verification on 2026-07-03.</p>
+    </main>
+  </body>
+</html>

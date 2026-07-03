@@ -54,7 +54,7 @@ export async function GET() {
       {
         status: "error",
         message:
-          "Active deployment predates the compliance-root protocol. Run pnpm judge:prepare-demo:testnet for a fresh AIDUSD demo campaign after setting the local testnet source account."
+          "Active deployment predates the compliance-root protocol. Prepare a fresh AIDUSD campaign after setting the testnet source account."
       },
       { status: 409 }
     );

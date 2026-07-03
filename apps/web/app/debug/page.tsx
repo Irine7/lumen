@@ -1,5 +1,5 @@
-import { DebugClient } from "./debug-client";
+import { redirect } from "next/navigation";
 
 export default function DebugPage() {
-  return <DebugClient />;
+  redirect("/demo");
 }

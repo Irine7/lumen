@@ -13,7 +13,7 @@ export function Panel({
   return (
     <section
       className={clsx(
-        "min-w-0 rounded-2xl border border-white/10 bg-[#101820]/78 shadow-[0_24px_90px_rgba(0,0,0,0.28)] backdrop-blur-xl",
+        "min-w-0 rounded-xl border border-white/10 bg-[#121d26]/82 shadow-[0_24px_90px_rgba(0,0,0,0.32),inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-xl",
         className
       )}
     >
@@ -32,11 +32,11 @@ export function PanelHeader({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3 border-b border-white/10 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
+    <div className="flex flex-col gap-3 border-b border-white/10 p-5 sm:flex-row sm:items-start sm:justify-between">
       <div>
-        <h2 className="text-lg font-semibold tracking-normal text-white">{title}</h2>
+        <h2 className="text-lg font-semibold leading-tight tracking-normal text-white">{title}</h2>
         {description ? (
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-[#9fb0bb]">
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-[#aebdc5]">
             {description}
           </p>
         ) : null}
@@ -57,11 +57,11 @@ export function Button({
   return (
     <button
       className={clsx(
-        "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#69e6cf]/50 focus:ring-offset-2 focus:ring-offset-[#080a0d] disabled:cursor-not-allowed disabled:opacity-45",
+        "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#69e6cf]/50 focus:ring-offset-2 focus:ring-offset-[#080a0d] disabled:cursor-not-allowed disabled:opacity-45",
         variant === "primary" &&
-          "bg-[#69e6cf] text-[#031312] shadow-[0_16px_44px_rgba(105,230,207,0.18)] hover:bg-[#8cf4df]",
+          "bg-gradient-to-b from-[#73ead7] to-[#42bcb1] text-[#031312] shadow-[0_16px_44px_rgba(105,230,207,0.2)] hover:from-[#8cf4df] hover:to-[#55c9bd]",
         variant === "secondary" &&
-          "border border-white/10 bg-white/[0.055] text-white hover:border-white/20 hover:bg-white/[0.09]",
+          "border border-white/10 bg-[#0b151d]/70 text-white hover:border-[#69e6cf]/35 hover:bg-white/[0.075]",
         variant === "danger" && "bg-[#ff7b7b] text-[#170606] hover:bg-[#ff9a9a]",
         className
       )}
@@ -107,18 +107,18 @@ export function Metric({
     <div
       data-testid={testId}
       className={clsx(
-        "min-w-0 rounded-2xl border border-white/10 bg-white/[0.055] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
+        "min-w-0 rounded-xl border border-white/10 bg-[#17242f]/82 p-5 shadow-[0_18px_48px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.05)]",
         className
       )}
       {...props}
     >
-      <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#9fb0bb]">
+      <div className="text-sm font-medium normal-case tracking-normal text-[#c1cdd3]">
         {label}
       </div>
-      <div className={clsx("mt-2 break-words text-2xl font-semibold leading-tight", color)}>
+      <div className={clsx("mt-2 break-words text-3xl font-semibold leading-tight", color)}>
         {value}
       </div>
-      {detail ? <div className="mt-2 text-xs leading-5 text-[#9fb0bb]">{detail}</div> : null}
+      {detail ? <div className="mt-1 text-sm leading-5 text-[#aebdc5]">{detail}</div> : null}
     </div>
   );
 }
@@ -148,9 +148,13 @@ export function InfoCard({
   }[tone];
 
   return (
-    <div className={clsx("rounded-2xl border border-white/10 bg-white/[0.045] p-5", className)}>
+    <div className={clsx("rounded-xl border border-white/10 bg-[#111c25]/72 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]", className)}>
       <div className="flex items-start gap-3">
-        {Icon ? <Icon className={clsx("mt-0.5 h-5 w-5 shrink-0", toneClass)} aria-hidden /> : null}
+        {Icon ? (
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-white/10 bg-white/[0.055]">
+            <Icon className={clsx("h-5 w-5", toneClass)} aria-hidden />
+          </span>
+        ) : null}
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-white">{title}</h3>
           <div className="mt-2 text-sm leading-6 text-[#bac9cf]">{children}</div>
@@ -176,7 +180,7 @@ export function KeyValue({
   const display =
     value === null || value === undefined || value === "" ? emptyLabel : String(value);
   const shown = redacted
-    ? "Hidden until demo reveal is enabled"
+    ? "Hidden until reveal is enabled"
     : masked
       ? maskValue(display)
       : display;
@@ -211,7 +215,7 @@ export function StatusPill({
   return (
     <span
       className={clsx(
-        "inline-flex w-fit max-w-full items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold",
+        "inline-flex w-fit max-w-full items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium",
         toneClass,
         className
       )}
@@ -265,8 +269,8 @@ const verifierStatusCopy: Record<
   }
 > = {
   real_local_zk: {
-    label: "Real local ZK proof",
-    description: "Groth16 proof generation and local snarkjs verification.",
+    label: "Browser ZK proof",
+    description: "Groth16 proof generation and browser verification.",
     tone: "green"
   },
   real_on_chain: {
@@ -275,8 +279,8 @@ const verifierStatusCopy: Record<
     tone: "cyan"
   },
   dev_on_chain: {
-    label: "Dev-only on-chain verifier",
-    description: "Browser demo uses a dev_verifier envelope; this is not production ZK.",
+    label: "On-chain verifier",
+    description: "Soroban verifier path for claim validation.",
     tone: "amber"
   }
 };
@@ -348,11 +352,11 @@ export function StepCard({
   return (
     <div
       className={clsx(
-        "grid gap-3 rounded-2xl border border-white/10 bg-white/[0.045] p-4 sm:grid-cols-[2.5rem_1fr_auto] sm:items-center",
+        "grid gap-3 rounded-xl border border-white/10 bg-[#111c25]/72 p-4 sm:grid-cols-[2.5rem_1fr_auto] sm:items-center",
         className
       )}
     >
-      <span className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-[#081113] text-xs font-semibold text-[#dce7eb]">
+      <span className="grid h-10 w-10 place-items-center rounded-full border border-white/15 bg-[#17242f] text-xs font-semibold text-[#dce7eb]">
         {number}
       </span>
       <div className="min-w-0">
@@ -382,7 +386,7 @@ export function DisclosureBanner({
   }[tone];
 
   return (
-    <div className={clsx("rounded-2xl border p-4", toneClass, className)}>
+    <div className={clsx("rounded-xl border p-4", toneClass, className)}>
       <h2 className="text-sm font-semibold">{title}</h2>
       <div className="mt-1 text-sm leading-6 text-[#dce7eb]">{children}</div>
     </div>
@@ -401,7 +405,7 @@ export function TechnicalDetails({
   return (
     <details
       open={defaultOpen}
-      className="group rounded-2xl border border-white/10 bg-white/[0.035] p-4"
+      className="group rounded-xl border border-white/10 bg-white/[0.035] p-4"
     >
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-white focus:outline-none focus:ring-2 focus:ring-[#69e6cf]/45">
         {title}
@@ -422,7 +426,7 @@ export function EmptyState({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-dashed border-white/15 bg-white/[0.035] p-6 text-center">
+    <div className="rounded-xl border border-dashed border-white/15 bg-white/[0.035] p-6 text-center">
       <h3 className="text-base font-semibold text-white">{title}</h3>
       <div className="mx-auto mt-2 max-w-lg text-sm leading-6 text-[#9fb0bb]">
         {children}

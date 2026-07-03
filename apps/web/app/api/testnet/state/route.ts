@@ -244,10 +244,10 @@ function classifyCampaign(args: {
 
 function statusMessage(campaignState: ActiveTestnetState["computed"]["campaignState"]): string {
   if (campaignState === "pristine") {
-    return "Ready for full demo sequence";
+    return "Ready for full sequence";
   }
   if (campaignState === "partially_used" || campaignState === "consumed") {
-    return "This campaign has already been used. Run pnpm judge:prepare-demo:testnet for a pristine demo.";
+    return "This campaign has already processed claims. Prepare a fresh campaign before a new full run.";
   }
   return "Live stats unavailable.";
 }

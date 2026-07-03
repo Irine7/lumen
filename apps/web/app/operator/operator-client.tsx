@@ -23,7 +23,7 @@ import {
 } from "@/lib/active-testnet-state";
 import { formatAmount, shortenAddress } from "@/lib/format";
 
-const freshCampaignCommand = "pnpm judge:prepare-demo:testnet";
+const freshCampaignCommand = "pnpm stellar:fresh-aidusd-campaign:testnet";
 
 export function OperatorClient() {
   const { campaign, createCampaign, resetDemo, tree, complianceTree, ready } = useLumenDemo();
@@ -112,7 +112,7 @@ export function OperatorClient() {
               Campaign operator
             </h1>
             <p className="mt-4 max-w-3xl text-lg leading-8 text-[#bac9cf]">
-              Manage the active AIDUSD campaign configuration and demo readiness.
+              Manage the active AIDUSD campaign configuration and readiness.
             </p>
           </div>
           <StatusDot
@@ -159,14 +159,13 @@ export function OperatorClient() {
 
       <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
         <Panel>
-          <PanelHeader title="Demo readiness" description="Operator-facing checks for the recording." />
+          <PanelHeader title="Campaign readiness" description="Operator-facing checks for the active campaign." />
           <div className="grid gap-4 p-5">
             <InfoCard title="Active AIDUSD escrow" icon={WalletCards} tone="green">
-              The visible demo campaign is configured for {formatAmount(active?.escrowFunded, assetCode)}.
+              The active campaign is configured for {formatAmount(active?.escrowFunded, assetCode)}.
             </InfoCard>
             <InfoCard title="Read-only setup command" icon={TerminalSquare} tone="cyan">
-              Use this only when intentionally preparing a fresh campaign. Do not run it during
-              the pristine recording unless you mean to replace the active demo state.
+              Use this only when intentionally preparing a fresh campaign for a new testnet run.
             </InfoCard>
             <CodeBlock value={freshCampaignCommand} />
           </div>
@@ -185,12 +184,12 @@ export function OperatorClient() {
         </Panel>
       </div>
 
-      <TechnicalDetails title="Local simulator campaign controls">
+      <TechnicalDetails title="Campaign configuration controls">
         <div className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
           <div className="grid gap-4">
             <div className="flex flex-wrap items-center gap-2">
-              {ready ? <StatusPill tone="green">Local simulator ready</StatusPill> : null}
-              {saved ? <StatusPill tone="green">Local campaign saved</StatusPill> : null}
+              {ready ? <StatusPill tone="green">Configuration ready</StatusPill> : null}
+              {saved ? <StatusPill tone="green">Campaign saved</StatusPill> : null}
             </div>
 
             <label className="grid gap-2 text-sm text-[#d8e7ec]">
@@ -246,7 +245,7 @@ export function OperatorClient() {
                   type="button"
                   variant="secondary"
                   onClick={() => update("eligibilityRoot", tree.root)}
-                  aria-label="Load demo eligibility root"
+                  aria-label="Load eligibility root"
                 >
                   <Trees className="h-4 w-4" />
                 </Button>
@@ -265,7 +264,7 @@ export function OperatorClient() {
                   type="button"
                   variant="secondary"
                   onClick={() => update("complianceRoot", complianceTree.root)}
-                  aria-label="Load demo compliance root"
+                  aria-label="Load compliance root"
                 >
                   <Trees className="h-4 w-4" />
                 </Button>
@@ -284,17 +283,17 @@ export function OperatorClient() {
             <div className="flex flex-wrap gap-3 pt-2">
               <Button type="button" onClick={submit}>
                 <Save className="h-4 w-4" />
-                Save local campaign
+                Save campaign
               </Button>
               <Button type="button" variant="secondary" onClick={resetDemo}>
                 <RefreshCw className="h-4 w-4" />
-                Reset local simulator
+                Reset configuration
               </Button>
             </div>
           </div>
 
           <Panel className="bg-white/[0.025]">
-            <PanelHeader title="Local config" />
+            <PanelHeader title="Campaign config" />
             <dl className="p-5">
               <KeyValue label="Campaign ID" value={draft.campaignId} />
               <KeyValue label="Asset" value={draft.asset} />
@@ -310,8 +309,8 @@ export function OperatorClient() {
       </TechnicalDetails>
 
       <DisclosureBanner title="Disclosure" tone="amber">
-        This screen shows public testnet metadata and local simulator controls. It does not expose
-        private keys, source account secrets, or real recipient witness data.
+        This screen shows public testnet metadata and campaign controls. It does not expose
+        private keys, source account secrets, or recipient witness material.
       </DisclosureBanner>
     </div>
   );

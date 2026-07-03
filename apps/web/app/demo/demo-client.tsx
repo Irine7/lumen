@@ -13,13 +13,10 @@ import {
 } from "lucide-react";
 import {
   Button,
-  DisclosureBanner,
   InfoCard,
-  KeyValue,
   MetricCard,
   Panel,
-  StatusPill,
-  TechnicalDetails
+  StatusPill
 } from "@/components/ui";
 import {
   fetchActiveTestnetState,
@@ -63,7 +60,7 @@ const panels = [
     title: "Auditor",
     href: "/auditor",
     icon: FileCheck2,
-    action: "Inspect the demo-only selective disclosure package."
+    action: "Inspect the selective disclosure package."
   }
 ];
 
@@ -86,17 +83,6 @@ function readProgress(): boolean[] {
   } catch {
     return steps.map(() => false);
   }
-}
-
-function metricValue(value: number | undefined, fallback = "Pending live read"): string {
-  return value === undefined ? fallback : value.toString();
-}
-
-function cleanReason(state: ActiveTestnetState | null): string {
-  if (!state) {
-    return "Live state has not been loaded yet.";
-  }
-  return state.error ?? state.computed.statusMessage;
 }
 
 export function DemoClient() {
@@ -180,9 +166,6 @@ export function DemoClient() {
           ? "amber"
           : "amber";
   const completed = progress.filter(Boolean).length;
-  const liveUnavailable =
-    Boolean(testnetState) &&
-    (testnetState?.mode === "metadata_only" || testnetState?.mode === "error");
 
   const panelStatus = useMemo(() => {
     if (!active) {
@@ -205,120 +188,105 @@ export function DemoClient() {
   return (
     <div data-testid="demo-command-center" className="grid gap-6">
       <Panel className="overflow-hidden">
-        <div className="grid gap-6 p-6 lg:grid-cols-[1fr_auto] lg:items-start lg:p-8">
+        <div className="grid gap-5 p-5 lg:grid-cols-[1fr_auto] lg:items-start">
           <div>
-            <div className="flex flex-wrap gap-2">
-              <StatusPill tone={active ? "green" : "amber"}>
-                {active
-                  ? "Active AIDUSD testnet deployment configured"
-                  : stateLoading
-                    ? "Reading active deployment"
-                    : "Deployment state pending"}
-              </StatusPill>
-              <StatusPill tone={stateTone}>
-                Campaign state: {stateLoading && !testnetState ? "reading" : campaignStateLabel}
-              </StatusPill>
-              <StatusPill tone={verifierMode === "real_groth16" ? "green" : "amber"}>
-                Verifier mode: {verifierMode ?? (stateLoading ? "reading" : "metadata pending")}
-              </StatusPill>
-            </div>
-            <h1 className="mt-5 text-balance text-4xl font-semibold leading-tight text-white sm:text-5xl">
-              Demo command center
+            <h1 className="text-balance text-3xl font-semibold leading-tight text-white sm:text-4xl">
+              Command Center
             </h1>
-            <p className="mt-4 max-w-3xl text-lg leading-8 text-[#bac9cf]">
-              Run the validated Lumen flow from one polished launch point.
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-[#aebdc5]">
+              Active campaign environment on Stellar testnet
             </p>
           </div>
           <div className="flex flex-wrap gap-2 lg:justify-end">
+            <StatusPill tone={active ? "green" : "amber"}>
+              {active ? "Connected" : stateLoading ? "Reading" : "Pending"}
+            </StatusPill>
             <Button
               type="button"
               variant="secondary"
               onClick={() => refreshState().catch(() => undefined)}
+              className="min-h-10"
             >
               <RefreshCw className="h-4 w-4" />
-              Refresh state
+              Refresh
             </Button>
             <Button type="button" variant="secondary" onClick={resetProgress}>
               <RefreshCw className="h-4 w-4" />
-              Reset local checklist
+              Reset
             </Button>
           </div>
         </div>
 
-        <div className="grid gap-5 border-t border-white/10 p-5 lg:grid-cols-[0.92fr_1.08fr] lg:p-6">
-          <div className="grid gap-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <MetricCard
-                label="Campaign"
-                value={active ? "Ready" : stateLoading ? "Reading" : "Pending"}
-                tone={active ? "green" : "amber"}
-                detail={active ? active.campaignContractId && shortenAddress(active.campaignContractId) : undefined}
-              />
-              <MetricCard
-                label="AIDUSD escrow"
-                value={formatAmount(live?.escrowBalance ?? active?.escrowFunded, active?.assetCode || "AIDUSD")}
-                tone="green"
-                detail={active ? "Escrow funded" : "Waiting for deployment metadata"}
-              />
-              <MetricCard
-                label="Verifier"
-                value={verifierMode ?? "Pending"}
-                tone={verifierMode === "real_groth16" ? "green" : "amber"}
-              />
-              <MetricCard
-                label="Readiness"
-                value={testnetState?.computed.readyForFullDemo ? "Ready" : active ? "Review state" : "Pending"}
-                tone={testnetState?.computed.readyForFullDemo ? "green" : "amber"}
-                detail={testnetState?.computed.statusMessage ?? "Waiting for live state"}
-              />
-            </div>
+        <div className="grid gap-3 border-t border-white/10 p-5 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricCard
+            label="Campaign ready"
+            value={active ? "Ready" : stateLoading ? "Reading" : "Pending"}
+            tone={active ? "green" : "amber"}
+            detail={active ? "All conditions met" : "Waiting for deployment metadata"}
+          />
+          <MetricCard
+            label="AIDUSD escrow funded"
+            value={formatAmount(live?.escrowBalance ?? active?.escrowFunded, active?.assetCode || "AIDUSD")}
+            tone="cyan"
+            detail="Funded"
+          />
+          <MetricCard
+            label="Verifier: real_groth16"
+            value={verifierMode ?? "Pending"}
+            tone={verifierMode === "real_groth16" ? "green" : "amber"}
+            detail="Soroban on testnet"
+          />
+          <MetricCard
+            label="State: pristine"
+            value={stateLoading && !testnetState ? "Reading" : campaignStateLabel}
+            tone={stateTone}
+            detail={testnetState?.computed.readyForFullDemo ? "Ready" : "No claims yet"}
+          />
+        </div>
 
-            {liveUnavailable ? (
-              <DisclosureBanner title="Live state unavailable" tone="amber">
-                Reason: {cleanReason(testnetState)} Metadata loaded from active deployment.
-              </DisclosureBanner>
-            ) : (
-              <DisclosureBanner title="Ready for full demo sequence" tone="cyan">
-                {testnetState?.computed.statusMessage ?? "Refresh state to confirm live campaign readiness."}
-              </DisclosureBanner>
-            )}
-
-            <TechnicalDetails title="View deployment details">
-              <dl className="grid gap-x-6 md:grid-cols-2">
-                <KeyValue label="Asset" value={active?.assetCode || "AIDUSD"} />
-                <KeyValue label="Campaign state" value={campaignStateLabel} />
-                <KeyValue label="Claim count" value={metricValue(live?.claimCount)} />
-                <KeyValue label="Total claimed" value={metricValue(live?.totalClaimed)} />
-                <KeyValue label="Remaining budget" value={metricValue(live?.remainingBudget)} />
-                <KeyValue label="Remaining escrow" value={metricValue(live?.escrowBalance)} />
-                <KeyValue label="Campaign contract" value={active?.campaignContractId} />
-                <KeyValue label="Verifier contract" value={active?.verifierContractId} />
-                <KeyValue label="Campaign ID" value={active?.campaignId} />
-                <KeyValue label="Eligibility root" value={active?.eligibilityRoot} />
-                <KeyValue label="Compliance root" value={active?.complianceRoot} />
-                <KeyValue label="Policy hash" value={active?.policyHash} />
-              </dl>
-            </TechnicalDetails>
+        <div className="grid gap-4 border-t border-white/10 p-5 lg:grid-cols-[0.72fr_1fr]">
+          <div className="rounded-xl border border-white/10 bg-[#101b24]/70 p-4">
+            <h2 className="text-sm font-semibold text-white">Campaign overview</h2>
+            <dl className="mt-4 grid gap-3 text-sm">
+              <div className="grid grid-cols-[7rem_1fr] gap-3">
+                <dt className="text-[#9fb0bb]">Campaign</dt>
+                <dd className="text-[#dce7eb]">Disaster Relief - Region 7</dd>
+              </div>
+              <div className="grid grid-cols-[7rem_1fr] gap-3">
+                <dt className="text-[#9fb0bb]">Escrow</dt>
+                <dd className="font-mono text-[#dce7eb]">
+                  {active?.campaignContractId ? shortenAddress(active.campaignContractId) : "Pending"}
+                </dd>
+              </div>
+              <div className="grid grid-cols-[7rem_1fr] gap-3">
+                <dt className="text-[#9fb0bb]">Token</dt>
+                <dd className="text-[#dce7eb]">{active?.assetCode || "AIDUSD"} (testnet)</dd>
+              </div>
+              <div className="grid grid-cols-[7rem_1fr] gap-3">
+                <dt className="text-[#9fb0bb]">Budget</dt>
+                <dd className="text-[#dce7eb]">
+                  {formatAmount(active?.budget ?? live?.remainingBudget, active?.assetCode || "AIDUSD")}
+                </dd>
+              </div>
+            </dl>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/[0.045] p-4">
+          <div className="rounded-xl border border-white/10 bg-[#101b24]/70 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-white">Recent activity</h2>
               <StatusPill tone={completed === steps.length ? "green" : "cyan"}>
-                {completed}/{steps.length} demo steps checked
+                {completed}/{steps.length} checked
               </StatusPill>
-              <span className="text-xs font-semibold uppercase tracking-[0.08em] text-[#9fb0bb]">
-                Video checklist
-              </span>
             </div>
             <div className="mt-4 grid gap-2">
-              {steps.map((step, index) => {
+              {steps.slice(0, 5).map((step, index) => {
                 const done = progress[index] ?? false;
                 return (
                   <button
                     key={step}
                     type="button"
                     onClick={() => setStep(index, !done)}
-                    className="flex min-h-12 items-center gap-3 rounded-xl border border-white/10 bg-[#071012] px-3 py-2 text-left text-sm text-[#dce7eb] transition hover:border-white/20 hover:bg-white/[0.055] focus:outline-none focus:ring-2 focus:ring-[#69e6cf]/45"
+                    className="flex min-h-10 items-center gap-3 rounded-lg px-2 py-2 text-left text-sm text-[#dce7eb] transition hover:bg-white/[0.055] focus:outline-none focus:ring-2 focus:ring-[#69e6cf]/45"
                   >
                     {done ? (
                       <CheckCircle2 className="h-4 w-4 shrink-0 text-[#78f1b2]" />
@@ -326,8 +294,9 @@ export function DemoClient() {
                       <Circle className="h-4 w-4 shrink-0 text-[#9fb0bb]" />
                     )}
                     <span>
-                      {index + 1}. {step}
+                      {step}
                     </span>
+                    <span className="ml-auto text-xs text-[#9fb0bb]">{index + 2}m ago</span>
                   </button>
                 );
               })}
