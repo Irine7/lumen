@@ -1,21 +1,26 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Database, MonitorCog, RefreshCw } from "lucide-react";
+import { Database, MonitorCog, RefreshCw, ShieldCheck, WalletCards } from "lucide-react";
 import {
   Button,
+  DisclosureBanner,
+  EmptyState,
+  InfoCard,
   KeyValue,
-  Metric,
+  MetricCard,
   Panel,
   PanelHeader,
   StatusDot,
-  VerifierStatusBadge
+  StatusPill,
+  TechnicalDetails
 } from "@/components/ui";
 import { useLumenDemo } from "@/lib/demo-runtime";
 import {
   fetchActiveTestnetState,
   type ActiveTestnetState
 } from "@/lib/active-testnet-state";
+import { formatAmount, formatStatus, shortenAddress } from "@/lib/format";
 
 type DashboardMode = "testnet" | "demo";
 
@@ -66,24 +71,20 @@ function describeStateProblem(state: ActiveTestnetState | null): {
   if (state.mode === "metadata_only") {
     return {
       tone: "amber",
-      label: "Live stats unavailable",
-      message: state.error ?? "Active deployment metadata loaded, but live contract reads failed."
+      label: "Live read unavailable",
+      message: state.error ?? "Metadata loaded from active deployment. Live contract reads failed."
     };
   }
 
   return {
     tone: "red",
-    label: "Testnet state read failed",
+    label: "Live read unavailable",
     message: state.error ?? state.computed.statusMessage
   };
 }
 
-function unavailable(state: ActiveTestnetState | null): string {
-  return state?.error ? `unavailable: ${state.error}` : "unavailable";
-}
-
-function metricValue(value: number | undefined, state: ActiveTestnetState | null): string {
-  return value === undefined ? unavailable(state) : value.toString();
+function valueOrPending(value: number | undefined): string {
+  return value === undefined ? "Pending live read" : value.toString();
 }
 
 export function DonorClient() {
@@ -135,11 +136,11 @@ export function DonorClient() {
               perRecipientCap: ""
             },
             computed: {
-              campaignState: "unread",
+              campaignState: "unavailable",
               readyForFullDemo: false,
               statusMessage: error instanceof Error ? error.message : String(error)
             }
-          },
+          }
         });
       }
     });
@@ -168,256 +169,196 @@ export function DonorClient() {
   const state = testnetState.status === "loaded" ? testnetState.state : null;
   const active = state?.ok ? state.deployment : null;
   const live = state?.mode === "live" ? state.live : undefined;
-  const testnetProblem = useMemo(() => {
-    if (testnetState.status !== "loaded") {
-      return null;
-    }
-    return describeStateProblem(testnetState.state);
-  }, [testnetState]);
+  const testnetProblem = useMemo(() => describeStateProblem(state), [state]);
+  const assetCode = active?.assetCode || "AIDUSD";
+  const verifierMode = live?.verifierMode ?? active?.verifierMode;
 
   return (
     <div className="grid gap-6">
-      <Panel>
-        <PanelHeader
-          title="Campaign accountability"
-          description={
-            mode === "testnet"
-              ? "Live active Stellar testnet campaign state."
-              : "Local browser simulator state, explicitly separate from testnet."
-          }
-          action={
+      <Panel className="overflow-hidden">
+        <div className="grid gap-6 p-6 lg:grid-cols-[1fr_auto] lg:items-start lg:p-8">
+          <div>
             <div className="flex flex-wrap gap-2">
-              <div className="flex flex-wrap gap-2" role="group" aria-label="Dashboard mode">
-                <Button
-                  type="button"
-                  variant={mode === "testnet" ? "primary" : "secondary"}
-                  onClick={() => setMode("testnet")}
-                >
-                  <Database className="h-4 w-4" />
-                  Testnet state
-                </Button>
-                <Button
-                  type="button"
-                  variant={mode === "demo" ? "primary" : "secondary"}
-                  onClick={() => setMode("demo")}
-                >
-                  <MonitorCog className="h-4 w-4" />
-                  Local Demo
-                </Button>
-              </div>
-              {mode === "testnet" ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  data-testid="donor-refresh-button"
-                  onClick={() => refreshTestnet().catch(() => undefined)}
-                >
-                  <RefreshCw className="h-4 w-4" />
-                  Refresh
-                </Button>
-              ) : (
-                <Button type="button" variant="secondary" onClick={resetDemo}>
-                  <RefreshCw className="h-4 w-4" />
-                  Reset
-                </Button>
-              )}
+              <StatusPill tone={active ? "green" : "amber"}>
+                {active ? "Escrow funded" : "Reading campaign metadata"}
+              </StatusPill>
+              <StatusPill tone={verifierMode === "real_groth16" ? "green" : "amber"}>
+                Verifier: {verifierMode ?? "pending"}
+              </StatusPill>
+              <StatusPill tone="amber">Testnet prototype</StatusPill>
             </div>
-          }
-        />
-        <div className="grid gap-4 p-5">
-          {mode === "testnet" && testnetState.status === "loading" ? (
-            <div className="rounded-lg border border-[#26313d] bg-[#10161d] p-4">
-              <StatusDot tone="cyan" label="Reading active testnet state" />
-            </div>
-          ) : null}
-
-          {mode === "testnet" && state ? (
-            <div className="rounded-lg border border-[#26313d] bg-[#10161d] p-4">
-              <StatusDot
-                tone={state.mode === "live" ? "green" : state.mode === "metadata_only" ? "amber" : "red"}
-                label={
-                  state.mode === "live"
-                    ? "Testnet state configured"
-                    : state.mode === "metadata_only"
-                      ? "Testnet metadata configured"
-                      : "Testnet state unavailable"
-                }
-              />
-              <p className="mt-3 text-sm leading-6 text-[#d8e7ec]">
-                {state.computed.statusMessage}
-              </p>
-            </div>
-          ) : null}
-
-          {mode === "testnet" && testnetProblem ? (
-            <div className="rounded-lg border border-[#26313d] bg-[#10161d] p-4">
-              <StatusDot tone={testnetProblem.tone} label={testnetProblem.label} />
-              <p className="mt-3 break-words text-sm leading-6 text-[#d8e7ec]">
-                {testnetProblem.message}
-              </p>
-            </div>
-          ) : null}
-
-          {mode === "testnet" && active ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <Metric label="Configured budget" value={active.budget} tone="cyan" />
-              <Metric label={`${active.assetCode} escrow funded`} value={active.escrowFunded} tone="green" />
-              <Metric
-                label="Total distributed"
-                value={metricValue(live?.totalClaimed, state)}
-                tone="green"
-                data-testid="donor-total-distributed"
-              />
-              <Metric
-                label="Remaining budget"
-                value={metricValue(live?.remainingBudget, state)}
-              />
-              <Metric
-                label="Actual token / escrow balance"
-                value={metricValue(live?.actualTokenBalance ?? live?.escrowBalance, state)}
-                data-testid="donor-escrow-balance"
-              />
-              <Metric
-                label="Claim count"
-                value={metricValue(live?.claimCount, state)}
-                tone="green"
-              />
-              <Metric
-                label="Duplicates blocked"
-                value={metricValue(live?.duplicateClaimsBlocked, state)}
-                tone="amber"
-              />
-              <Metric
-                label="Non-compliant/ineligible attempts blocked"
-                value={metricValue(live?.invalidClaimsBlocked, state)}
-                tone="red"
-              />
-              <Metric label="Verifier mode" value={live?.verifierMode ?? unavailable(state)} tone="cyan" />
-            </div>
-          ) : null}
-
-          {mode === "demo" ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <Metric label="Total budget" value={`$${campaign.budget}`} tone="cyan" />
-              <Metric label="Total distributed" value={`$${stats.totalClaimed}`} tone="green" />
-              <Metric label="Remaining budget" value={`$${stats.remainingBudget}`} />
-              <Metric label="Successful claims" value={stats.claimCount.toString()} tone="green" />
-              <Metric label="Duplicates blocked" value={stats.duplicateClaimsBlocked.toString()} tone="amber" />
-              <Metric label="Non-compliant/ineligible blocked" value={stats.invalidClaimsBlocked.toString()} tone="red" />
-            </div>
-          ) : null}
-        </div>
-      </Panel>
-
-      <Panel>
-        <PanelHeader title="Verifier and latest claim" />
-        <div className="grid gap-4 p-5 md:grid-cols-2">
-          <div className="rounded-lg border border-[#26313d] bg-[#10161d] p-4">
-            {mode === "testnet" && active ? (
-              <>
-                <StatusDot
-                  tone={live?.verifierMode === "real_groth16" ? "green" : "amber"}
-                  label={`Verifier mode: ${live?.verifierMode ?? unavailable(state)}`}
-                />
-                <p className="mt-3 text-sm leading-6 text-[#d8e7ec]">
-                  {state?.error
-                    ? `Verifier live read note: ${state.error}`
-                    : "Verifier status comes from the shared read-only testnet state endpoint."}
-                </p>
-              </>
-            ) : (
-              <VerifierStatusBadge status="dev_on_chain" showDescription />
-            )}
+            <h1 className="mt-5 text-balance text-4xl font-semibold leading-tight text-white sm:text-5xl">
+              Campaign accountability
+            </h1>
+            <p className="mt-4 max-w-3xl text-lg leading-8 text-[#bac9cf]">
+              Live public view of the active AIDUSD aid campaign.
+            </p>
           </div>
-          <div className="rounded-lg border border-[#26313d] bg-[#10161d] p-4">
-            <StatusDot tone={lastTx ? "green" : "neutral"} label="Last browser testnet tx" />
-            <dl className="mt-4">
-              <KeyValue label="Tx hash" value={lastTx?.txHash ?? "none in this browser session"} />
-              <KeyValue label="Last payout recipient" value={lastTx?.payoutRecipient ?? "none"} />
-              <KeyValue
-                label="Last payout amount"
-                value={
-                  lastTx?.payoutAmount === undefined
-                    ? "none"
-                    : `${lastTx.payoutAmount} ${lastTx.assetCode ?? active?.assetCode ?? "testnet asset"}`
-                }
-              />
-              <KeyValue
-                label="Recipient balance after"
-                value={lastTx?.recipientBalanceAfter ?? "none"}
-              />
-              <KeyValue
-                label="Escrow balance after"
-                value={lastTx?.campaignEscrowAfter ?? "none"}
-              />
-              <KeyValue label="Claimed at" value={lastTx ? new Date(lastTx.at).toLocaleString() : "none"} />
-            </dl>
-          </div>
-        </div>
-      </Panel>
-
-      <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-        <Panel>
-          <PanelHeader title="Public campaign data" />
-          <dl className="p-5">
-            {mode === "testnet" && active ? (
-              <>
-                <KeyValue label="Campaign contract ID" value={active.campaignContractId} />
-                <KeyValue label="Verifier contract ID" value={active.verifierContractId} />
-                <KeyValue label="Asset code" value={active.assetCode} />
-                <KeyValue label="Asset contract ID" value={active.assetContractId} />
-                <KeyValue label="Campaign ID" value={active.campaignId} />
-                <KeyValue label="Eligibility root" value={active.eligibilityRoot} />
-                <KeyValue label="Compliance root" value={active.complianceRoot} />
-                <KeyValue label="Policy hash" value={active.policyHash} />
-                <KeyValue label="Budget" value={active.budget} />
-                <KeyValue label="Escrow funded" value={active.escrowFunded} />
-                <KeyValue label="Actual token / escrow balance" value={metricValue(live?.actualTokenBalance ?? live?.escrowBalance, state)} />
-                <KeyValue label="Per-recipient cap" value={active.perRecipientCap} />
-                <KeyValue label="Verifier key hash" value={active.verificationKeyHash} />
-              </>
-            ) : (
-              <>
-                <KeyValue label="Mode" value="Local Demo" />
-                <KeyValue label="Campaign name" value={campaign.name} />
-                <KeyValue label="Eligibility root" value={campaign.eligibilityRoot} />
-                <KeyValue label="Compliance root" value={campaign.complianceRoot} />
-                <KeyValue label="Policy hash" value={campaign.policyHash} />
-                <KeyValue label="Asset" value={campaign.asset} />
-              </>
-            )}
-          </dl>
-        </Panel>
-
-        <Panel>
-          <PanelHeader
-            title={mode === "testnet" ? "Read status" : "Recent local events"}
-            description={
-              mode === "testnet"
-                ? "Testnet panel uses active deployment data and read-only RPC simulation."
-                : "Local Soroban-shaped event stream."
-            }
-          />
-          <div className="grid gap-3 p-5">
+          <div className="flex flex-wrap gap-2 lg:justify-end">
+            <div className="flex rounded-2xl border border-white/10 bg-white/[0.035] p-1" role="group" aria-label="Dashboard mode">
+              <Button
+                type="button"
+                variant={mode === "testnet" ? "primary" : "secondary"}
+                onClick={() => setMode("testnet")}
+                className="min-h-10"
+              >
+                <Database className="h-4 w-4" />
+                Testnet
+              </Button>
+              <Button
+                type="button"
+                variant={mode === "demo" ? "primary" : "secondary"}
+                onClick={() => setMode("demo")}
+                className="min-h-10"
+              >
+                <MonitorCog className="h-4 w-4" />
+                Local
+              </Button>
+            </div>
             {mode === "testnet" ? (
-              <div className="rounded-lg border border-[#26313d] bg-[#111820] p-4">
-                <StatusDot
-                  tone={testnetProblem ? testnetProblem.tone : active ? "green" : "amber"}
-                  label={testnetProblem ? testnetProblem.label : active ? "Active testnet read ready" : "Waiting"}
-                />
-                <dl className="mt-4">
-                  <KeyValue label="Read mode" value={state?.mode ?? "not loaded"} />
-                  <KeyValue label="Recipient identity" value="hidden by ZK proof" />
-                  <KeyValue label="Compliance clearance" value="hidden by ZK proof" />
-                  <KeyValue label="Payout address" value="public Stellar address" />
-                  <KeyValue label="Selective disclosure" value="auditor-only demo package" />
-                  <KeyValue label="Witness data" value="never leaves browser" />
-                  <KeyValue label="Fallback data" value="none in Testnet state mode" />
-                </dl>
-              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                data-testid="donor-refresh-button"
+                onClick={() => refreshTestnet().catch(() => undefined)}
+              >
+                <RefreshCw className="h-4 w-4" />
+                Refresh
+              </Button>
             ) : (
-              [...events].reverse().slice(0, 8).map((event) => (
-                <div key={`${event.type}-${event.at}`} className="rounded-lg border border-[#26313d] bg-[#111820] p-4">
+              <Button type="button" variant="secondary" onClick={resetDemo}>
+                <RefreshCw className="h-4 w-4" />
+                Reset local demo
+              </Button>
+            )}
+          </div>
+        </div>
+      </Panel>
+
+      {mode === "testnet" ? (
+        <>
+          {testnetState.status === "loading" ? (
+            <DisclosureBanner title="Reading live state" tone="cyan">
+              Checking the active deployment through the read-only state endpoint.
+            </DisclosureBanner>
+          ) : null}
+
+          {testnetProblem ? (
+            <DisclosureBanner title={testnetProblem.label} tone={testnetProblem.tone}>
+              Metadata loaded from active deployment. Reason: {testnetProblem.message}
+            </DisclosureBanner>
+          ) : null}
+
+          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <MetricCard
+              label="Escrow funded"
+              value={formatAmount(active?.escrowFunded, assetCode)}
+              tone="green"
+              testId="donor-escrow-balance"
+            />
+            <MetricCard
+              label="Total distributed"
+              value={
+                live?.totalClaimed === undefined
+                  ? testnetProblem
+                    ? "Live read unavailable"
+                    : "Pending live read"
+                  : formatAmount(live.totalClaimed, assetCode)
+              }
+              tone="cyan"
+              testId="donor-total-distributed"
+            />
+            <MetricCard
+              label="Remaining budget"
+              value={formatAmount(live?.remainingBudget ?? active?.budget, assetCode)}
+            />
+            <MetricCard label="Claim count" value={valueOrPending(live?.claimCount)} tone="green" />
+            <MetricCard
+              label="Verifier mode"
+              value={verifierMode ?? "Pending live read"}
+              tone={verifierMode === "real_groth16" ? "green" : "amber"}
+            />
+            <MetricCard
+              label="Audit commitment"
+              value={shortenAddress(active?.verificationKeyHash)}
+            />
+          </section>
+
+          <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+            <Panel>
+              <PanelHeader title="Public assurance" description="What donors can confirm without recipient identity data." />
+              <div className="grid gap-4 p-5">
+                <InfoCard title="Recipient privacy" icon={ShieldCheck} tone="green">
+                  Identities, eligibility reasons, private witnesses, and Merkle paths are not
+                  included in the public donor dashboard.
+                </InfoCard>
+                <InfoCard title="AIDUSD escrow" icon={WalletCards} tone="cyan">
+                  Campaign accounting is shown from public deployment metadata and live read-only
+                  contract state when available.
+                </InfoCard>
+              </div>
+            </Panel>
+
+            <Panel>
+              <PanelHeader title="Latest claim in this browser" description="Helpful during the video after Dora is submitted." />
+              <div className="p-5">
+                {lastTx ? (
+                  <dl>
+                    <KeyValue label="Claim tx" value={lastTx.txHash} />
+                    <KeyValue label="Payout recipient" value={lastTx.payoutRecipient} />
+                    <KeyValue
+                      label="Payout amount"
+                      value={
+                        lastTx.payoutAmount === undefined
+                          ? "Not available yet"
+                          : formatAmount(lastTx.payoutAmount, lastTx.assetCode ?? assetCode)
+                      }
+                    />
+                    <KeyValue label="Recipient balance after" value={lastTx.recipientBalanceAfter} />
+                    <KeyValue label="Escrow balance after" value={lastTx.campaignEscrowAfter} />
+                    <KeyValue label="Claimed at" value={new Date(lastTx.at).toLocaleString()} />
+                  </dl>
+                ) : (
+                  <EmptyState title="No claim in this browser session">
+                    Submit Dora from the recipient page, then return here to show the donor
+                    accountability update.
+                  </EmptyState>
+                )}
+              </div>
+            </Panel>
+          </div>
+
+          <TechnicalDetails title="Public campaign data">
+            <dl className="grid gap-x-6 md:grid-cols-2">
+              <KeyValue label="Campaign contract" value={active?.campaignContractId} />
+              <KeyValue label="Verifier contract" value={active?.verifierContractId} />
+              <KeyValue label="AIDUSD/SAC contract" value={active?.assetContractId} />
+              <KeyValue label="Campaign ID" value={active?.campaignId} />
+              <KeyValue label="Eligibility root" value={active?.eligibilityRoot} />
+              <KeyValue label="Compliance root" value={active?.complianceRoot} />
+              <KeyValue label="Policy hash" value={active?.policyHash} />
+              <KeyValue label="Verification key hash" value={active?.verificationKeyHash} />
+              <KeyValue label="Actual token balance" value={live?.actualTokenBalance} />
+              <KeyValue label="Read mode" value={state?.mode ?? "Pending live read"} />
+            </dl>
+          </TechnicalDetails>
+        </>
+      ) : (
+        <>
+          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <MetricCard label="Total budget" value={formatAmount(campaign.budget)} tone="cyan" />
+            <MetricCard label="Total distributed" value={formatAmount(stats.totalClaimed)} tone="green" />
+            <MetricCard label="Remaining budget" value={formatAmount(stats.remainingBudget)} />
+            <MetricCard label="Successful claims" value={stats.claimCount.toString()} tone="green" />
+            <MetricCard label="Duplicates blocked" value={stats.duplicateClaimsBlocked.toString()} tone="amber" />
+            <MetricCard label="Rejected attempts" value={stats.invalidClaimsBlocked.toString()} tone="red" />
+          </section>
+
+          <Panel>
+            <PanelHeader title="Recent local events" description="Local simulator trail for comparison only." />
+            <div className="grid gap-3 p-5">
+              {[...events].reverse().slice(0, 5).map((event) => (
+                <div key={`${event.type}-${event.at}`} className="rounded-2xl border border-white/10 bg-white/[0.045] p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <StatusDot
                       tone={
@@ -429,22 +370,24 @@ export function DonorClient() {
                               ? "red"
                               : "cyan"
                       }
-                      label={event.type.replaceAll("_", " ")}
+                      label={formatStatus(event.type)}
                     />
-                    <span className="text-xs text-[#93a4ad]">{new Date(event.at).toLocaleString()}</span>
+                    <span className="text-xs text-[#9fb0bb]">
+                      {new Date(event.at).toLocaleString()}
+                    </span>
                   </div>
-                  <p className="mt-2 text-sm text-[#d8e7ec]">{event.message}</p>
+                  <p className="mt-2 text-sm leading-6 text-[#dce7eb]">{event.message}</p>
                   {event.nullifierHash ? (
-                    <p className="mt-2 break-all font-mono text-xs text-[#93a4ad]">
-                      nullifier: {event.nullifierHash}
+                    <p className="mt-2 font-mono text-xs text-[#9fb0bb]">
+                      nullifier: {shortenAddress(event.nullifierHash)}
                     </p>
                   ) : null}
                 </div>
-              ))
-            )}
-          </div>
-        </Panel>
-      </div>
+              ))}
+            </div>
+          </Panel>
+        </>
+      )}
     </div>
   );
 }

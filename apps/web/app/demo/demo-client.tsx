@@ -11,11 +11,21 @@ import {
   RefreshCw,
   ShieldCheck
 } from "lucide-react";
-import { Button, KeyValue, Panel, PanelHeader, StatusDot } from "@/components/ui";
+import {
+  Button,
+  DisclosureBanner,
+  InfoCard,
+  KeyValue,
+  MetricCard,
+  Panel,
+  StatusPill,
+  TechnicalDetails
+} from "@/components/ui";
 import {
   fetchActiveTestnetState,
   type ActiveTestnetState
 } from "@/lib/active-testnet-state";
+import { formatAmount, shortenAddress } from "@/lib/format";
 
 const PROGRESS_KEY = "lumen-demo-progress-v1";
 const AUDIT_PACKAGE_KEY = "lumen-demo-audit-package";
@@ -35,25 +45,25 @@ const panels = [
     title: "Operator",
     href: "/operator",
     icon: ShieldCheck,
-    action: "Check campaign roots and AIDUSD escrow."
+    action: "Review active roots, verifier, and escrow readiness."
   },
   {
     title: "Recipient",
     href: "/recipient",
     icon: HandCoins,
-    action: "Generate Dora proof, submit, then try duplicate/Eve/Mallory."
+    action: "Generate Dora proof, submit, then show expected rejections."
   },
   {
     title: "Donor",
     href: "/donor",
     icon: LayoutDashboard,
-    action: "Refresh live AIDUSD state and latest tx."
+    action: "Show live campaign accounting and public commitments."
   },
   {
     title: "Auditor",
     href: "/auditor",
     icon: FileCheck2,
-    action: "Load the local demo disclosure package."
+    action: "Inspect the demo-only selective disclosure package."
   }
 ];
 
@@ -78,8 +88,15 @@ function readProgress(): boolean[] {
   }
 }
 
-function liveValue(value: number | undefined, unavailableReason: string): string {
-  return value === undefined ? unavailableReason : value.toString();
+function metricValue(value: number | undefined, fallback = "Pending live read"): string {
+  return value === undefined ? fallback : value.toString();
+}
+
+function cleanReason(state: ActiveTestnetState | null): string {
+  if (!state) {
+    return "Live state has not been loaded yet.";
+  }
+  return state.error ?? state.computed.statusMessage;
 }
 
 export function DemoClient() {
@@ -122,7 +139,7 @@ export function DemoClient() {
           perRecipientCap: ""
         },
         computed: {
-          campaignState: "unread",
+          campaignState: "unavailable",
           readyForFullDemo: false,
           statusMessage: error instanceof Error ? error.message : String(error)
         }
@@ -148,147 +165,151 @@ export function DemoClient() {
 
   const active = testnetState?.ok ? testnetState.deployment : null;
   const live = testnetState?.mode === "live" ? testnetState.live : undefined;
-  const unavailableReason =
-    testnetState?.mode === "metadata_only"
-      ? `unavailable: ${testnetState.error ?? "live read failed"}`
-      : testnetState?.mode === "error"
-        ? `unavailable: ${testnetState.error ?? "state read failed"}`
-        : stateLoading
-          ? "reading"
-          : "unavailable";
-  const campaignState = useMemo(() => {
-    if (!testnetState) {
-      return {
-        label: stateLoading ? "Campaign state: reading" : "Campaign state: unread",
-        value: stateLoading ? "reading" : "unread",
-        tone: "amber" as const,
-        readiness: stateLoading ? "Reading active testnet state." : "Live state has not been loaded yet.",
-        recipientStatus:
-          "Per-recipient claim status is inferred from aggregate state and demo fixture only."
-      };
-    }
-
-    const state = testnetState.computed.campaignState;
-    const liveUnavailable = testnetState.mode === "metadata_only" || testnetState.mode === "error";
-
-    return {
-      label:
-        state === "pristine"
-          ? "Campaign state: pristine"
-          : state === "partially_used"
-            ? "Campaign state: partially used"
-            : state === "consumed"
-              ? "Campaign state: consumed"
-              : `Campaign state: unread (${testnetState.error ?? "live read unavailable"})`,
-      value: state,
-      tone:
-        state === "pristine"
-          ? ("green" as const)
-          : testnetState.mode === "error"
-            ? ("red" as const)
-            : ("amber" as const),
-      readiness: liveUnavailable
-        ? testnetState.computed.statusMessage
-        : testnetState.computed.statusMessage,
-      recipientStatus:
-        "Per-recipient claim status is inferred from aggregate state and demo fixture only."
-    };
-  }, [stateLoading, testnetState]);
+  const verifierMode = testnetState?.live?.verifierMode ?? active?.verifierMode;
+  const campaignStateValue = testnetState?.computed.campaignState ?? "unknown";
+  const campaignStateLabel =
+    campaignStateValue === "partially_used"
+      ? "partially used"
+      : campaignStateValue;
+  const stateTone =
+    campaignStateValue === "pristine"
+      ? "green"
+      : campaignStateValue === "unavailable"
+        ? "amber"
+        : campaignStateValue === "unknown"
+          ? "amber"
+          : "amber";
   const completed = progress.filter(Boolean).length;
+  const liveUnavailable =
+    Boolean(testnetState) &&
+    (testnetState?.mode === "metadata_only" || testnetState?.mode === "error");
+
   const panelStatus = useMemo(() => {
     if (!active) {
       return {
-        Operator: stateLoading ? "Reading state" : "Unavailable",
-        Recipient: stateLoading ? "Reading state" : "Unavailable",
-        Donor: stateLoading ? "Reading state" : "Unavailable",
+        Operator: stateLoading ? "Reading state" : "Waiting for state",
+        Recipient: stateLoading ? "Reading state" : "Waiting for state",
+        Donor: stateLoading ? "Reading state" : "Waiting for state",
         Auditor: hasAuditPackage ? "Package available" : "Waiting for package"
       };
     }
 
     return {
-      Operator: `${active.assetCode || "Asset"} campaign ready`,
-      Recipient: "Real Testnet Claim ready",
-      Donor: testnetState?.mode === "live" ? "Live AIDUSD state ready" : "Metadata loaded",
+      Operator: `${active.assetCode || "AIDUSD"} campaign ready`,
+      Recipient: "Real testnet claim ready",
+      Donor: testnetState?.mode === "live" ? "Live state ready" : "Metadata loaded",
       Auditor: hasAuditPackage ? "Package available" : "Waiting for package"
     };
   }, [active, hasAuditPackage, stateLoading, testnetState?.mode]);
 
   return (
     <div data-testid="demo-command-center" className="grid gap-6">
-      <Panel>
-        <PanelHeader
-          title="Demo command center"
-          description="A guided launcher for the validated product flow."
-          action={
+      <Panel className="overflow-hidden">
+        <div className="grid gap-6 p-6 lg:grid-cols-[1fr_auto] lg:items-start lg:p-8">
+          <div>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="secondary" onClick={() => refreshState().catch(() => undefined)}>
-                <RefreshCw className="h-4 w-4" />
-                Refresh state
-              </Button>
-              <Button type="button" variant="secondary" onClick={resetProgress}>
-                <RefreshCw className="h-4 w-4" />
-                Reset progress
-              </Button>
-            </div>
-          }
-        />
-        <div className="grid gap-5 p-5 lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="rounded-lg border border-[#26313d] bg-[#10161d] p-4">
-            <StatusDot
-              tone={
-                testnetState?.mode === "live"
-                  ? "green"
-                  : testnetState?.mode === "error"
-                    ? "red"
-                    : active
-                      ? "amber"
-                      : "amber"
-              }
-              label={
-                active
+              <StatusPill tone={active ? "green" : "amber"}>
+                {active
                   ? "Active AIDUSD testnet deployment configured"
                   : stateLoading
-                    ? "Reading active AIDUSD testnet deployment"
-                    : "Active testnet deployment unavailable"
-              }
-            />
-            <dl className="mt-4">
-              <KeyValue label="Asset" value={active?.assetCode || "not loaded"} />
-              <KeyValue label="Campaign contract" value={active?.campaignContractId || "not loaded"} />
-              <KeyValue
-                label="Verifier mode"
-                value={live?.verifierMode ?? (active ? "metadata loaded, verifier live read optional" : "not loaded")}
-              />
-              <KeyValue label="Campaign state" value={campaignState.value} />
-              <KeyValue label="Claim count" value={liveValue(live?.claimCount, unavailableReason)} />
-              <KeyValue label="Total claimed" value={liveValue(live?.totalClaimed, unavailableReason)} />
-              <KeyValue label="Remaining budget" value={liveValue(live?.remainingBudget, unavailableReason)} />
-              <KeyValue label="Remaining escrow" value={liveValue(live?.escrowBalance, unavailableReason)} />
-              <KeyValue label="Eligibility root" value={active?.eligibilityRoot || "not loaded"} />
-              <KeyValue label="Compliance root" value={active?.complianceRoot || "not loaded"} />
-              <KeyValue
-                label="Status"
-                value={testnetState?.computed.statusMessage ?? (stateLoading ? "reading" : "not loaded")}
-              />
-            </dl>
-            <div className="mt-4 rounded-lg border border-[#26313d] bg-[#080b0f] p-3">
-              {testnetState?.mode === "metadata_only" ? (
-                <StatusDot tone="amber" label="Campaign metadata loaded" />
-              ) : (
-                <StatusDot tone={campaignState.tone} label={campaignState.label} />
-              )}
-              <p className="mt-2 text-sm leading-6 text-[#d8e7ec]">
-                {testnetState?.mode === "metadata_only"
-                  ? `Live stats unavailable: ${testnetState.error ?? "unknown read failure"}`
-                  : campaignState.readiness}
-              </p>
-              <p className="mt-2 text-xs leading-5 text-[#93a4ad]">
-                {campaignState.recipientStatus}
-              </p>
+                    ? "Reading active deployment"
+                    : "Deployment state pending"}
+              </StatusPill>
+              <StatusPill tone={stateTone}>
+                Campaign state: {stateLoading && !testnetState ? "reading" : campaignStateLabel}
+              </StatusPill>
+              <StatusPill tone={verifierMode === "real_groth16" ? "green" : "amber"}>
+                Verifier mode: {verifierMode ?? (stateLoading ? "reading" : "metadata pending")}
+              </StatusPill>
             </div>
+            <h1 className="mt-5 text-balance text-4xl font-semibold leading-tight text-white sm:text-5xl">
+              Demo command center
+            </h1>
+            <p className="mt-4 max-w-3xl text-lg leading-8 text-[#bac9cf]">
+              Run the validated Lumen flow from one polished launch point.
+            </p>
           </div>
-          <div className="rounded-lg border border-[#26313d] bg-[#10161d] p-4">
-            <StatusDot tone={completed === steps.length ? "green" : "cyan"} label={`${completed}/${steps.length} demo steps checked`} />
+          <div className="flex flex-wrap gap-2 lg:justify-end">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => refreshState().catch(() => undefined)}
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh state
+            </Button>
+            <Button type="button" variant="secondary" onClick={resetProgress}>
+              <RefreshCw className="h-4 w-4" />
+              Reset local checklist
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid gap-5 border-t border-white/10 p-5 lg:grid-cols-[0.92fr_1.08fr] lg:p-6">
+          <div className="grid gap-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <MetricCard
+                label="Campaign"
+                value={active ? "Ready" : stateLoading ? "Reading" : "Pending"}
+                tone={active ? "green" : "amber"}
+                detail={active ? active.campaignContractId && shortenAddress(active.campaignContractId) : undefined}
+              />
+              <MetricCard
+                label="AIDUSD escrow"
+                value={formatAmount(live?.escrowBalance ?? active?.escrowFunded, active?.assetCode || "AIDUSD")}
+                tone="green"
+                detail={active ? "Escrow funded" : "Waiting for deployment metadata"}
+              />
+              <MetricCard
+                label="Verifier"
+                value={verifierMode ?? "Pending"}
+                tone={verifierMode === "real_groth16" ? "green" : "amber"}
+              />
+              <MetricCard
+                label="Readiness"
+                value={testnetState?.computed.readyForFullDemo ? "Ready" : active ? "Review state" : "Pending"}
+                tone={testnetState?.computed.readyForFullDemo ? "green" : "amber"}
+                detail={testnetState?.computed.statusMessage ?? "Waiting for live state"}
+              />
+            </div>
+
+            {liveUnavailable ? (
+              <DisclosureBanner title="Live state unavailable" tone="amber">
+                Reason: {cleanReason(testnetState)} Metadata loaded from active deployment.
+              </DisclosureBanner>
+            ) : (
+              <DisclosureBanner title="Ready for full demo sequence" tone="cyan">
+                {testnetState?.computed.statusMessage ?? "Refresh state to confirm live campaign readiness."}
+              </DisclosureBanner>
+            )}
+
+            <TechnicalDetails title="View deployment details">
+              <dl className="grid gap-x-6 md:grid-cols-2">
+                <KeyValue label="Asset" value={active?.assetCode || "AIDUSD"} />
+                <KeyValue label="Campaign state" value={campaignStateLabel} />
+                <KeyValue label="Claim count" value={metricValue(live?.claimCount)} />
+                <KeyValue label="Total claimed" value={metricValue(live?.totalClaimed)} />
+                <KeyValue label="Remaining budget" value={metricValue(live?.remainingBudget)} />
+                <KeyValue label="Remaining escrow" value={metricValue(live?.escrowBalance)} />
+                <KeyValue label="Campaign contract" value={active?.campaignContractId} />
+                <KeyValue label="Verifier contract" value={active?.verifierContractId} />
+                <KeyValue label="Campaign ID" value={active?.campaignId} />
+                <KeyValue label="Eligibility root" value={active?.eligibilityRoot} />
+                <KeyValue label="Compliance root" value={active?.complianceRoot} />
+                <KeyValue label="Policy hash" value={active?.policyHash} />
+              </dl>
+            </TechnicalDetails>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-white/[0.045] p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <StatusPill tone={completed === steps.length ? "green" : "cyan"}>
+                {completed}/{steps.length} demo steps checked
+              </StatusPill>
+              <span className="text-xs font-semibold uppercase tracking-[0.08em] text-[#9fb0bb]">
+                Video checklist
+              </span>
+            </div>
             <div className="mt-4 grid gap-2">
               {steps.map((step, index) => {
                 const done = progress[index] ?? false;
@@ -297,14 +318,16 @@ export function DemoClient() {
                     key={step}
                     type="button"
                     onClick={() => setStep(index, !done)}
-                    className="flex min-h-11 items-center gap-3 rounded-lg border border-[#26313d] bg-[#080b0f] px-3 py-2 text-left text-sm text-[#d8e7ec] transition hover:border-[#3b4a58]"
+                    className="flex min-h-12 items-center gap-3 rounded-xl border border-white/10 bg-[#071012] px-3 py-2 text-left text-sm text-[#dce7eb] transition hover:border-white/20 hover:bg-white/[0.055] focus:outline-none focus:ring-2 focus:ring-[#69e6cf]/45"
                   >
                     {done ? (
-                      <CheckCircle2 className="h-4 w-4 shrink-0 text-[#5df0a3]" />
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-[#78f1b2]" />
                     ) : (
-                      <Circle className="h-4 w-4 shrink-0 text-[#93a4ad]" />
+                      <Circle className="h-4 w-4 shrink-0 text-[#9fb0bb]" />
                     )}
-                    <span>{index + 1}. {step}</span>
+                    <span>
+                      {index + 1}. {step}
+                    </span>
                   </button>
                 );
               })}
@@ -316,22 +339,15 @@ export function DemoClient() {
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {panels.map((panel) => {
           const Icon = panel.icon;
+          const status = panelStatus[panel.title as keyof typeof panelStatus];
+          const tone = /Waiting|Reading/.test(status) ? "amber" : "green";
           return (
             <Panel key={panel.title}>
-              <div className="grid gap-4 p-5">
-                <Icon className="h-5 w-5 text-[#51d6ff]" />
-                <div>
-                  <h2 className="text-lg font-semibold text-white">{panel.title}</h2>
-                  <p className="mt-2 text-sm leading-6 text-[#93a4ad]">{panel.action}</p>
-                </div>
-                <StatusDot
-                  tone={
-                    /Unavailable|Reading/.test(panelStatus[panel.title as keyof typeof panelStatus])
-                      ? "amber"
-                      : "green"
-                  }
-                  label={panelStatus[panel.title as keyof typeof panelStatus]}
-                />
+              <div className="grid h-full gap-4 p-5">
+                <InfoCard title={panel.title} icon={Icon} tone="cyan" className="h-full">
+                  {panel.action}
+                </InfoCard>
+                <StatusPill tone={tone}>{status}</StatusPill>
                 <Link href={panel.href}>
                   <Button className="w-full" variant="secondary">
                     Open {panel.title}

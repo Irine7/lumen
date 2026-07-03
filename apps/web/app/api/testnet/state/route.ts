@@ -85,6 +85,9 @@ function normalizeDeployment(active: ActiveDeploymentFile): {
       missing
     ),
     verifierContractId: stringField(active.verifierContractId, "verifierContractId", missing),
+    ...(typeof active.verifierInfo?.mode === "string"
+      ? { verifierMode: active.verifierInfo.mode }
+      : {}),
     campaignId: stringField(active.campaignId, "campaignId", missing),
     eligibilityRoot: stringField(active.eligibilityRoot, "eligibilityRoot", missing),
     complianceRoot: stringField(active.complianceRoot, "complianceRoot", missing),
@@ -126,8 +129,9 @@ function metadataOnly(
     mode: "metadata_only",
     error: reason,
     deployment,
+    ...(deployment.verifierMode ? { live: { verifierMode: deployment.verifierMode } } : {}),
     computed: {
-      campaignState: "unread",
+      campaignState: "unavailable",
       readyForFullDemo: false,
       statusMessage: `Campaign metadata loaded. Live stats unavailable: ${reason}`
     }
@@ -145,8 +149,9 @@ function errorState(
       mode: "error",
       error: message,
       deployment,
+      ...(deployment.verifierMode ? { live: { verifierMode: deployment.verifierMode } } : {}),
       computed: {
-        campaignState: "unread",
+        campaignState: "unavailable",
         readyForFullDemo: false,
         statusMessage: message
       }

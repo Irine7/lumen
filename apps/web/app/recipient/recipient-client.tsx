@@ -19,11 +19,15 @@ import { verifyClaimProofLocally } from "@lumen-aid/prover";
 import {
   Button,
   CodeBlock,
+  DisclosureBanner,
   KeyValue,
   Metric,
   Panel,
   PanelHeader,
   StatusDot,
+  StatusPill,
+  StepCard,
+  TechnicalDetails,
   VerifierStatusBadge
 } from "@/components/ui";
 import { useLumenDemo } from "@/lib/demo-runtime";
@@ -75,40 +79,72 @@ export function RecipientClient() {
 
   return (
     <div className="grid gap-6">
-      <Panel>
-        <PanelHeader
-          title="Recipient claim"
-          description="Run a real browser Groth16 proof to Stellar testnet, or switch to the local simulator for comparison."
-          action={
-            <div className="flex flex-wrap gap-2" role="group" aria-label="Claim mode">
-              <Button
-                type="button"
-                data-testid="recipient-real-testnet-mode"
-                variant={mode === "real" ? "primary" : "secondary"}
-                onClick={() => setMode("real")}
-              >
-                <Database className="h-4 w-4" />
-                Real Testnet Claim
-              </Button>
-              <Button
-                type="button"
-                variant={mode === "local" ? "primary" : "secondary"}
-                onClick={() => setMode("local")}
-              >
-                <MonitorCog className="h-4 w-4" />
-                Local Demo
-              </Button>
-              <Button
-                type="button"
-                variant={mode === "debug" ? "primary" : "secondary"}
-                onClick={() => setMode("debug")}
-              >
-                <Eye className="h-4 w-4" />
-                Debug
-              </Button>
+      <Panel className="overflow-hidden">
+        <div className="grid gap-6 p-6 lg:grid-cols-[1fr_auto] lg:items-start lg:p-8">
+          <div>
+            <div className="flex flex-wrap gap-2">
+              <StatusPill tone="green">Browser Groth16</StatusPill>
+              <StatusPill tone="cyan">Proof-bound payout</StatusPill>
+              <StatusPill tone="amber">Testnet prototype</StatusPill>
             </div>
-          }
-        />
+            <h1 className="mt-5 text-balance text-4xl font-semibold leading-tight text-white sm:text-5xl">
+              Recipient claim
+            </h1>
+            <p className="mt-4 max-w-3xl text-lg leading-8 text-[#bac9cf]">
+              Generate a real browser Groth16 proof, verify it locally, and submit a
+              proof-bound AIDUSD payout claim to Stellar testnet.
+            </p>
+          </div>
+          <div
+            className="flex flex-wrap gap-2 lg:justify-end"
+            role="group"
+            aria-label="Claim mode"
+          >
+            <Button
+              type="button"
+              data-testid="recipient-real-testnet-mode"
+              variant={mode === "real" ? "primary" : "secondary"}
+              onClick={() => setMode("real")}
+            >
+              <Database className="h-4 w-4" />
+              Real testnet
+            </Button>
+            <Button
+              type="button"
+              variant={mode === "local" ? "primary" : "secondary"}
+              onClick={() => setMode("local")}
+            >
+              <MonitorCog className="h-4 w-4" />
+              Local demo
+            </Button>
+            <Button
+              type="button"
+              variant={mode === "debug" ? "primary" : "secondary"}
+              onClick={() => setMode("debug")}
+            >
+              <Eye className="h-4 w-4" />
+              Debug
+            </Button>
+          </div>
+        </div>
+        <div className="grid gap-3 border-t border-white/10 p-5 md:grid-cols-5">
+          {[
+            "Select recipient",
+            "Generate proof",
+            "Verify locally",
+            "Submit claim",
+            "See payout result"
+          ].map((step, index) => (
+            <StepCard
+              key={step}
+              number={(index + 1).toString()}
+              title={step}
+              status={index === 0 ? "Start" : "Next"}
+              tone={index === 0 ? "cyan" : "neutral"}
+              className="sm:grid-cols-1"
+            />
+          ))}
+        </div>
       </Panel>
 
       {mode === "real" ? <RealTestnetClaim /> : null}
@@ -363,21 +399,21 @@ function RealTestnetClaim() {
       : "failed (real Groth16 rejected)"
     : proofStatus === "failed"
       ? "failed"
-      : "pending";
+      : "Waiting for proof";
   const recordingProofStatus = proofResult
-    ? "generated"
+    ? "Generated"
     : proofStatus === "failed"
-      ? "failed"
+      ? "Failed"
       : proofStatus === "idle"
-        ? "idle"
-        : "generating";
+        ? "Waiting for proof"
+        : "Generating";
   const submitReadiness = proofResult?.localVerification
-    ? "ready to submit"
-    : "disabled until local verification passes";
-  const claimResultLabel = claimResult ? (claimResult.ok ? "accepted" : "rejected") : "not submitted";
+    ? "Ready to submit"
+    : "Disabled until local verification passes";
+  const claimResultLabel = claimResult ? (claimResult.ok ? "Accepted" : "Rejected") : "Not submitted yet";
   const balanceDeltaLabel = claimResult?.campaignEscrowAfter
     ? `${claimResult.campaignEscrowBefore ?? "?"} -> ${claimResult.campaignEscrowAfter}`
-    : "no balance delta yet";
+    : "Will update after claim";
   const selectedRecordingStatus =
     selected.id === "dora"
       ? "eligible + compliant; Ready for valid claim"
@@ -388,7 +424,7 @@ function RealTestnetClaim() {
           : selected.eligible && selected.compliant
             ? "eligible + compliant"
             : "not ready for valid claim";
-  const generatedAfterProof = "will be generated after proof";
+  const generatedAfterProof = "Will be generated after proof";
   const selectedScenario =
     selectedId === "dora"
       ? claimResult?.status === "duplicate_rejected"
@@ -422,6 +458,11 @@ function RealTestnetClaim() {
             <Metric label="Asset" value={active.assetCode ?? "testnet asset"} />
             <Metric label="Escrow funded" value={active.escrowFunded ?? active.budget} />
           </div>
+
+          <DisclosureBanner title="Privacy note" tone="cyan">
+            Private witness stays in the browser worker. The relayer receives only proof bytes,
+            public inputs, and the public payout address.
+          </DisclosureBanner>
 
           <Panel>
             <PanelHeader
@@ -457,7 +498,7 @@ function RealTestnetClaim() {
                   </Button>
                 ))}
               </div>
-              <div className="rounded-lg border border-[#26313d] bg-[#080b0f] p-4">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.045] p-4">
                 <StatusDot tone={statusTone} label={selectedScenario} />
                 <dl className="mt-4">
                   <KeyValue label="Selected recipient" value={`${selected.displayName}: ${selectedRecordingStatus}`} />
@@ -498,10 +539,10 @@ function RealTestnetClaim() {
                           setSelectedId(recipient.id);
                           resetClaimState(recipient.defaultClaimAmount);
                         }}
-                        className={`rounded-lg border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-[#51d6ff]/50 focus:ring-offset-2 focus:ring-offset-[#080a0d] ${
+                        className={`rounded-2xl border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-[#69e6cf]/50 focus:ring-offset-2 focus:ring-offset-[#080a0d] ${
                           selectedId === recipient.id
-                            ? "border-[#51d6ff] bg-[#101d25]"
-                            : "border-[#26313d] bg-[#10161d] hover:border-[#3b4a58]"
+                            ? "border-[#69e6cf]/70 bg-[#69e6cf]/10"
+                            : "border-white/10 bg-white/[0.045] hover:border-white/20"
                         }`}
                       >
                         <div className="flex items-center justify-between gap-3">
@@ -532,11 +573,11 @@ function RealTestnetClaim() {
                     max={campaign.perRecipientCap}
                     value={amount}
                     onChange={(event) => resetClaimState(Number(event.target.value))}
-                    className="h-11 rounded-lg border border-[#2b3845] bg-[#080b0f] px-3 text-sm text-white outline-none focus:border-[#51d6ff]"
+                  className="h-11 rounded-xl border border-white/10 bg-[#071012] px-3 text-sm text-white outline-none focus:border-[#69e6cf]"
                   />
                 </label>
 
-                <div className="rounded-lg border border-[#26313d] bg-[#080b0f] p-4">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.045] p-4">
                   <div className="flex flex-wrap gap-3">
                     <Button type="button" variant="secondary" onClick={connectFreighter}>
                       Connect Freighter
@@ -555,7 +596,7 @@ function RealTestnetClaim() {
                         setProofResult(null);
                         setClaimResult(null);
                       }}
-                      className="h-11 rounded-lg border border-[#2b3845] bg-[#080b0f] px-3 font-mono text-xs text-white outline-none focus:border-[#51d6ff]"
+                      className="h-11 rounded-xl border border-white/10 bg-[#071012] px-3 font-mono text-xs text-white outline-none focus:border-[#69e6cf]"
                     />
                   </label>
                   <dl className="mt-4">
@@ -563,8 +604,8 @@ function RealTestnetClaim() {
                     <KeyValue label="Compliance clearance" value="hidden, proven in ZK" />
                     <KeyValue label="Fee payer" value="local testnet relayer" />
                     <KeyValue label="Payout recipient source" value={payoutSource} />
-                    <KeyValue label="Proof bound to recipient" value={payoutAccountHash ? "yes" : "invalid address"} />
-                    <KeyValue label="payout_account_hash" value={payoutAccountHash ?? "choose payout address"} />
+                    <KeyValue label="Proof bound to recipient" value={payoutAccountHash ? "yes" : "Waiting for valid payout address"} />
+                    <KeyValue label="payout_account_hash" value={payoutAccountHash ?? "Waiting for valid payout address"} />
                   </dl>
                 </div>
 
@@ -617,7 +658,7 @@ function RealTestnetClaim() {
                   </Button>
                 </div>
 
-                <div className="rounded-lg border border-[#26313d] bg-[#080b0f] p-4">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.045] p-4">
                   <StatusDot tone={statusTone} label={`Proof status: ${recordingProofStatus}`} />
                   <div className="mt-4 grid gap-0">
                     <KeyValue label="Selected" value={`${selected.displayName}: ${selectedRecordingStatus}`} />
@@ -626,14 +667,14 @@ function RealTestnetClaim() {
                     <KeyValue label="Local verification" value={localVerificationLabel} />
                     <KeyValue label="Submit readiness" value={submitReadiness} />
                     <KeyValue label="Claim result" value={claimResultLabel} />
-                    <KeyValue label="Tx hash" value={claimResult?.txHash ?? "not submitted"} />
+                    <KeyValue label="Tx hash" value={claimResult?.txHash ?? "Not submitted yet"} />
                     <KeyValue label="Payout recipient" value={claimResult?.payoutRecipient ?? payoutAddress} />
                     <KeyValue
                       label="Recipient balance"
                       value={
                         claimResult?.recipientBalanceAfter
                           ? `${claimResult.recipientBalanceBefore ?? "?"} -> ${claimResult.recipientBalanceAfter}`
-                          : "not submitted"
+                          : "Not submitted yet"
                       }
                     />
                     <KeyValue
@@ -641,14 +682,14 @@ function RealTestnetClaim() {
                       value={
                         claimResult?.campaignEscrowAfter
                           ? `${claimResult.campaignEscrowBefore ?? "?"} -> ${claimResult.campaignEscrowAfter}`
-                          : "not submitted"
+                          : "Not submitted yet"
                       }
                     />
                   </div>
                 </div>
 
                 {error ? (
-                  <div className="rounded-lg border border-[#ff6b6b]/45 bg-[#ff6b6b]/10 p-4">
+                  <div className="rounded-2xl border border-[#ff8b8b]/35 bg-[#ff8b8b]/10 p-4">
                     <StatusDot tone="red" label="Real testnet claim failed" />
                     <p className="mt-3 text-sm leading-6 text-[#ffd0d0]">{error}</p>
                   </div>
@@ -658,12 +699,11 @@ function RealTestnetClaim() {
               </div>
             </Panel>
 
-            <Panel>
-              <PanelHeader
-                title="Public claim payload"
-                description="Only these public values and proof bytes are sent to the relayer."
-              />
-              <div className="grid gap-5 p-5">
+            <TechnicalDetails title="Public claim payload">
+              <div className="grid gap-5">
+                <p className="text-sm leading-6 text-[#9fb0bb]">
+                  Only these public values and proof bytes are sent to the relayer.
+                </p>
                 <dl>
                   <KeyValue label="Campaign contract ID" value={active.campaignContractId} />
                   <KeyValue label="Verifier contract ID" value={active.verifierContractId} />
@@ -692,7 +732,7 @@ function RealTestnetClaim() {
                   />
                 ) : null}
               </div>
-            </Panel>
+            </TechnicalDetails>
           </div>
         </>
       ) : null}
@@ -703,7 +743,7 @@ function RealTestnetClaim() {
 function TestnetClaimOutcome({ result }: { result: TestnetClaimResult }) {
   const accepted = result.ok && result.status === "claim_accepted";
   return (
-    <div data-testid="claim-result-status" className="rounded-lg border border-[#26313d] bg-[#10161d] p-4">
+    <div data-testid="claim-result-status" className="rounded-2xl border border-white/10 bg-white/[0.045] p-4">
       <StatusDot
         tone={accepted ? "green" : result.status.includes("duplicate") ? "amber" : "red"}
         label={result.status.replaceAll("_", " ")}
@@ -795,10 +835,10 @@ function LocalDemoClaim() {
                   setSelectedId(recipient.id);
                   resetClaimState(recipient.defaultClaimAmount);
                 }}
-                className={`rounded-lg border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-[#51d6ff]/50 focus:ring-offset-2 focus:ring-offset-[#080a0d] ${
+                className={`rounded-2xl border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-[#69e6cf]/50 focus:ring-offset-2 focus:ring-offset-[#080a0d] ${
                   selectedId === recipient.id
-                    ? "border-[#51d6ff] bg-[#101d25]"
-                    : "border-[#26313d] bg-[#10161d] hover:border-[#3b4a58]"
+                    ? "border-[#69e6cf]/70 bg-[#69e6cf]/10"
+                    : "border-white/10 bg-white/[0.045] hover:border-white/20"
                 }`}
               >
                 <div className="flex items-center justify-between gap-3">
@@ -828,7 +868,7 @@ function LocalDemoClaim() {
               max={campaign.perRecipientCap}
               value={amount}
               onChange={(event) => resetClaimState(Number(event.target.value))}
-              className="h-11 rounded-lg border border-[#2b3845] bg-[#080b0f] px-3 text-sm text-white outline-none focus:border-[#51d6ff]"
+              className="h-11 rounded-xl border border-white/10 bg-[#071012] px-3 text-sm text-white outline-none focus:border-[#69e6cf]"
             />
           </label>
 
@@ -852,7 +892,7 @@ function LocalDemoClaim() {
             </Button>
           </div>
 
-          <div className="rounded-lg border border-[#26313d] bg-[#080b0f] p-4">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.045] p-4">
             <StatusDot
               tone={
                 status === "accepted"
@@ -926,10 +966,10 @@ function DebugClaimData() {
                 setSelectedId(recipient.id);
                 setRevealPrivate(false);
               }}
-              className={`rounded-lg border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-[#51d6ff]/50 focus:ring-offset-2 focus:ring-offset-[#080a0d] ${
+              className={`rounded-2xl border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-[#69e6cf]/50 focus:ring-offset-2 focus:ring-offset-[#080a0d] ${
                 selectedId === recipient.id
-                  ? "border-[#51d6ff] bg-[#101d25]"
-                  : "border-[#26313d] bg-[#10161d] hover:border-[#3b4a58]"
+                  ? "border-[#69e6cf]/70 bg-[#69e6cf]/10"
+                  : "border-white/10 bg-white/[0.045] hover:border-white/20"
               }`}
             >
               <span className="font-semibold text-white">{recipient.displayName}</span>
@@ -940,7 +980,7 @@ function DebugClaimData() {
           ))}
         </div>
 
-        <div className="rounded-lg border border-[#ffc857]/35 bg-[#ffc857]/10 p-4">
+        <div className="rounded-2xl border border-[#ffd36e]/35 bg-[#ffd36e]/10 p-4">
           <StatusDot tone="amber" label="Debug reveal warning" />
           <p className="mt-3 text-sm leading-6 text-[#ffe4a3]">
             These are synthetic demo witness values. This panel is not part of the real testnet

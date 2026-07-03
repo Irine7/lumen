@@ -8,6 +8,7 @@ export type ActiveTestnetState = {
     assetContractId: string;
     campaignContractId: string;
     verifierContractId: string;
+    verifierMode?: string;
     campaignId: string;
     eligibilityRoot: string;
     complianceRoot: string;
@@ -28,7 +29,7 @@ export type ActiveTestnetState = {
     invalidClaimsBlocked?: number;
   };
   computed: {
-    campaignState: "pristine" | "partially_used" | "consumed" | "unread";
+    campaignState: "pristine" | "partially_used" | "consumed" | "unavailable";
     readyForFullDemo: boolean;
     statusMessage: string;
   };

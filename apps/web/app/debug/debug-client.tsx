@@ -7,6 +7,7 @@ import { verifyClaimProofLocally } from "@lumen-aid/prover";
 import {
   Button,
   CodeBlock,
+  DisclosureBanner,
   KeyValue,
   Panel,
   PanelHeader,
@@ -31,19 +32,15 @@ export function DebugClient() {
 
   return (
     <div className="grid gap-6">
-      <div className="rounded-lg border border-[#ffc857]/45 bg-[#ffc857]/10 p-4">
-        <div className="flex items-start gap-3">
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-[#ffc857]" />
-          <div>
-            <h1 className="text-sm font-semibold text-[#ffe4a3]">
-              Demo debug mode. Do not use with real recipient data.
-            </h1>
-            <p className="mt-1 text-sm leading-6 text-[#d8e7ec]">
-              This route intentionally exposes private witness material for inspecting synthetic fixtures.
-            </p>
-          </div>
-        </div>
-      </div>
+      <DisclosureBanner title="Debug mode" tone="red">
+        <span className="inline-flex items-start gap-3">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-[#ff8b8b]" aria-hidden />
+          <span>
+            Synthetic demo values only. Never use this screen with real recipient data. This
+            route intentionally exposes private witness material for inspecting fixtures.
+          </span>
+        </span>
+      </DisclosureBanner>
 
       <Panel>
         <PanelHeader
@@ -71,7 +68,7 @@ export function DebugClient() {
             <select
               value={selectedId}
               onChange={(event) => setSelectedId(event.target.value as DemoRecipient["id"])}
-              className="h-11 rounded-lg border border-[#2b3845] bg-[#080b0f] px-3 text-sm text-white outline-none focus:border-[#51d6ff]"
+              className="h-11 rounded-xl border border-white/10 bg-[#071012] px-3 text-sm text-white outline-none focus:border-[#69e6cf]"
             >
               {recipients.map((recipient) => (
                 <option key={recipient.id} value={recipient.id}>
@@ -86,7 +83,7 @@ export function DebugClient() {
               type="number"
               value={amount}
               onChange={(event) => setAmount(Number(event.target.value))}
-              className="h-11 rounded-lg border border-[#2b3845] bg-[#080b0f] px-3 text-sm text-white outline-none focus:border-[#51d6ff]"
+              className="h-11 rounded-xl border border-white/10 bg-[#071012] px-3 text-sm text-white outline-none focus:border-[#69e6cf]"
             />
           </label>
           <div className="flex items-end">
@@ -113,7 +110,7 @@ export function DebugClient() {
               label="Documented real paths"
               value="Real local Groth16 scripts and real deployed testnet verification are documented outside this browser flow"
             />
-            <KeyValue label="Constraint status" value={proofResult?.ok ? "passed" : proofResult ? "failed" : "not run"} />
+            <KeyValue label="Constraint status" value={proofResult?.ok ? "passed" : proofResult ? "failed" : "Waiting for inspection"} />
           </dl>
         </Panel>
 

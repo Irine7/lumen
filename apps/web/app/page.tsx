@@ -1,191 +1,159 @@
 import Link from "next/link";
 import {
-  ArrowRight,
+  BadgeCheck,
+  CircleDollarSign,
   Fingerprint,
   HandCoins,
   Landmark,
-  LayoutDashboard,
+  Link2,
   ShieldCheck,
-  Trees,
-  WalletCards
+  Sparkles
 } from "lucide-react";
 import {
-  buildDemoComplianceTree,
-  buildDemoEligibilityTree,
-  createDemoCampaignConfig
-} from "@lumen-aid/merkle";
-import { Button, KeyValue, Metric, Panel, PanelHeader, StatusDot } from "@/components/ui";
-import { getPublicTestnetStatus, readPublicStellarEnv } from "@/lib/testnet-state";
+  Button,
+  InfoCard,
+  KeyValue,
+  Panel,
+  StatusPill,
+  StepCard,
+  TechnicalDetails
+} from "@/components/ui";
+import { activeDeployment } from "@/lib/deployment";
+import { shortenAddress } from "@/lib/format";
 
-const flowCards = [
+const productCards = [
   {
-    icon: Trees,
     title: "Prove eligibility privately",
-    text: "The browser proves membership in the public eligibility root without sending identity data or Merkle paths."
+    text: "Recipients prove they belong in the campaign set without publishing identity data.",
+    icon: Fingerprint
   },
   {
-    icon: ShieldCheck,
     title: "Prove compliance clearance privately",
-    text: "A second Merkle proof shows demo clearance status while the compliance witness stays local."
+    text: "Scoped clearance can be checked without turning the donor view into a personal dossier.",
+    icon: BadgeCheck
   },
   {
-    icon: Fingerprint,
     title: "Bind proof to payout address",
-    text: "The proof includes a public payout_account_hash so a relayer cannot redirect funds."
+    text: "The public claim ties the proof to the intended recipient account, blocking payout swaps.",
+    icon: Link2
   },
   {
-    icon: HandCoins,
-    title: "Receive AIDUSD testnet payout after Soroban verification",
-    text: "The campaign transfers AIDUSD/SAC escrow only after verifier and campaign checks pass."
+    title: "Release AIDUSD after Soroban verification",
+    text: "Campaign rules, nullifiers, and escrow movement stay accountable on the public rail.",
+    icon: CircleDollarSign
   }
 ];
 
-const statusBadges = [
-  ["Browser Groth16", "live", "green"],
-  ["Soroban verifier", "real_groth16", "cyan"],
-  ["Asset", "AIDUSD testnet SAC", "green"],
-  ["Trusted setup", "development", "amber"],
-  ["Audit", "not production audited", "amber"]
-] as const;
-
-const architecture = [
-  { label: "Operator", detail: "publishes roots", icon: ShieldCheck },
-  { label: "Recipient", detail: "proves privately", icon: Fingerprint },
-  { label: "Relayer", detail: "sends public payload", icon: WalletCards },
-  { label: "Soroban", detail: "verifies and pays", icon: Landmark },
-  { label: "Donor/auditor", detail: "review public and scoped evidence", icon: LayoutDashboard }
+const flow = [
+  { title: "Recipient proof", description: "Eligibility and clearance without identity exposure" },
+  { title: "Soroban verifier", description: "Groth16 verifier path for the active testnet deployment" },
+  { title: "Campaign escrow", description: "Nullifier, cap, budget, and payout checks" },
+  { title: "AIDUSD payout", description: "Proof-bound recipient receives aid" },
+  { title: "Donor dashboard", description: "Public aggregate accountability" }
 ];
 
 export default function Home() {
-  const tree = buildDemoEligibilityTree();
-  const complianceTree = buildDemoComplianceTree();
-  const campaign = createDemoCampaignConfig(tree, complianceTree);
-  const testnetStatus = getPublicTestnetStatus(readPublicStellarEnv());
-
   return (
-    <div className="grid gap-8">
-      <section className="grid gap-6 lg:grid-cols-[1fr_0.82fr] lg:items-stretch">
-        <div className="flex min-h-[520px] flex-col justify-between py-2">
-          <div>
-            <div className="mb-4 flex flex-wrap gap-2">
-              <span className="inline-flex rounded-lg border border-[#26313d] bg-[#10161d] px-3 py-2">
-                <StatusDot tone={testnetStatus.tone} label={testnetStatus.label} />
-              </span>
-              {statusBadges.map(([label, value, tone]) => (
-                <span
-                  key={label}
-                  className="inline-flex items-center gap-2 rounded-lg border border-[#26313d] bg-[#10161d] px-3 py-2 text-xs font-semibold text-[#d8e7ec]"
-                >
-                  <span
-                    className={
-                      tone === "green"
-                        ? "h-2 w-2 rounded-full bg-[#5df0a3]"
-                        : tone === "cyan"
-                          ? "h-2 w-2 rounded-full bg-[#51d6ff]"
-                          : "h-2 w-2 rounded-full bg-[#ffc857]"
-                    }
-                  />
-                  {label}: {value}
-                </span>
-              ))}
-            </div>
-
-            <h1 className="text-5xl font-semibold leading-tight text-white sm:text-6xl">
-              Lumen
-            </h1>
-            <p className="mt-5 max-w-3xl text-xl leading-8 text-[#d8e7ec] sm:text-2xl">
-              Private, ZK-compliant aid disbursements on Stellar.
-            </p>
-            <p className="mt-5 max-w-3xl text-sm leading-6 text-[#a7b7c0] sm:text-base">
-              Recipients prove eligibility and demo compliance clearance in the browser, bind
-              the proof to a public payout address, and receive AIDUSD testnet value only after
-              Soroban verification.
-            </p>
+    <div className="grid gap-10">
+      <section className="grid min-h-[calc(100vh-12rem)] gap-8 lg:grid-cols-[1.02fr_0.98fr] lg:items-center">
+        <div className="max-w-3xl">
+          <div className="mb-6 flex flex-wrap gap-2">
+            <StatusPill tone="cyan">AIDUSD testnet deployment configured</StatusPill>
+            <StatusPill tone="green">Verifier: {activeDeployment.verifierMode}</StatusPill>
           </div>
-
-          <div className="mt-8 grid gap-4 sm:grid-cols-3">
+          <h1 className="text-balance text-5xl font-semibold leading-[1.02] text-white sm:text-6xl lg:text-7xl">
+            Private aid payouts.
+            <span className="block text-[#bff8ee]">Public accountability.</span>
+          </h1>
+          <p className="mt-6 max-w-2xl text-lg leading-8 text-[#bac9cf] sm:text-xl">
+            Lumen lets recipients prove eligibility and compliance clearance in zero knowledge,
+            then receive AIDUSD from a Soroban-verified campaign escrow.
+          </p>
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link href="/demo">
-              <Button className="w-full">
-                <LayoutDashboard className="h-4 w-4" />
-                Open demo
+              <Button className="w-full sm:w-auto">
+                <Sparkles className="h-4 w-4" />
+                Open demo command center
               </Button>
             </Link>
             <Link href="/recipient">
-              <Button variant="secondary" className="w-full">
+              <Button variant="secondary" className="w-full sm:w-auto">
                 <HandCoins className="h-4 w-4" />
-                Claim as recipient
-              </Button>
-            </Link>
-            <Link href="/donor">
-              <Button variant="secondary" className="w-full">
-                <ArrowRight className="h-4 w-4" />
-                View donor state
+                Start recipient claim
               </Button>
             </Link>
           </div>
         </div>
 
-        <Panel className="self-stretch">
-          <PanelHeader
-            title="Validated AIDUSD flow"
-            description="Current active testnet campaign uses the compliance-aware 10-public-input proof."
-          />
-          <div className="grid gap-4 p-5">
-            <Metric label="Public inputs" value="10" tone="cyan" />
-            <Metric label="Private witness fields" value="17" />
-            <Metric label="Eligible demo leaves" value={tree.eligibleRecipients.length.toString()} tone="green" />
-            <Metric label="Cleared demo leaves" value={complianceTree.compliantRecipients.length.toString()} tone="green" />
-            <div className="rounded-lg border border-[#26313d] bg-[#10161d] p-4">
-              <StatusDot tone="green" label="AIDUSD live testnet payout validated" />
-              <div className="mt-4 grid gap-0">
-                <KeyValue label="Eligibility root" value={campaign.eligibilityRoot} />
-                <KeyValue label="Compliance root" value={campaign.complianceRoot} />
-                <KeyValue label="Policy hash" value={campaign.policyHash} />
-                <KeyValue label="Payout binding" value="payout_account_hash public input" />
+        <Panel className="overflow-hidden">
+          <div className="border-b border-white/10 p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-semibold text-white">Aid rail at a glance</h2>
+                <p className="mt-1 text-sm leading-6 text-[#9fb0bb]">
+                  Human-readable state for judges, with technical IDs tucked away.
+                </p>
               </div>
+              <StatusPill tone="green">Ready for demo</StatusPill>
             </div>
+          </div>
+          <div className="grid gap-3 p-5">
+            {flow.map((item, index) => (
+              <StepCard
+                key={item.title}
+                number={(index + 1).toString()}
+                title={item.title}
+                description={item.description}
+                status={index === 0 ? "Private" : index === flow.length - 1 ? "Public" : "Verified"}
+                tone={index === 0 ? "cyan" : index === flow.length - 1 ? "green" : "neutral"}
+              />
+            ))}
           </div>
         </Panel>
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {flowCards.map((item) => {
-          const Icon = item.icon;
-          return (
-            <div key={item.title} className="rounded-lg border border-[#26313d] bg-[#0f1318] p-5">
-              <Icon className="h-5 w-5 text-[#51d6ff]" />
-              <h2 className="mt-4 text-base font-semibold text-white">{item.title}</h2>
-              <p className="mt-2 text-sm leading-6 text-[#93a4ad]">{item.text}</p>
-            </div>
-          );
-        })}
+        {productCards.map((item) => (
+          <InfoCard key={item.title} title={item.title} icon={item.icon} tone="cyan">
+            {item.text}
+          </InfoCard>
+        ))}
       </section>
 
       <Panel>
-        <PanelHeader
-          title="Product flow"
-          description="The chain sees commitments, public payout data, and aggregate accounting, not recipient witness data."
-        />
-        <div className="grid gap-3 p-5 lg:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr_auto_1fr] lg:items-stretch">
-          {architecture.map((item, index) => {
-            const Icon = item.icon;
-            return (
-              <div key={item.label} className="contents">
-                <div className="rounded-lg border border-[#26313d] bg-[#10161d] p-4">
-                  <Icon className="h-5 w-5 text-[#51d6ff]" />
-                  <h2 className="mt-4 text-sm font-semibold text-white">{item.label}</h2>
-                  <p className="mt-1 text-xs leading-5 text-[#93a4ad]">{item.detail}</p>
-                </div>
-                {index < architecture.length - 1 ? (
-                  <div className="hidden items-center text-[#637582] lg:flex" aria-hidden="true">
-                    <ArrowRight className="h-5 w-5" />
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
+        <div className="grid gap-5 p-5 lg:grid-cols-[0.9fr_1.1fr] lg:p-6">
+          <InfoCard title="Built for accountable privacy" icon={ShieldCheck} tone="green">
+            Donors see aggregate distribution state. Recipients do not have to publish the facts
+            that made them eligible for aid.
+          </InfoCard>
+          <InfoCard title="Active testnet footprint" icon={Landmark} tone="cyan">
+            The current metadata points at campaign{" "}
+            <span className="font-mono">
+              {shortenAddress(activeDeployment.campaignContractId)}
+            </span>{" "}
+            and verifier{" "}
+            <span className="font-mono">
+              {shortenAddress(activeDeployment.verifierContractId)}
+            </span>.
+          </InfoCard>
+        </div>
+        <div className="px-5 pb-5 lg:px-6 lg:pb-6">
+          <TechnicalDetails title="View deployment details">
+            <dl>
+              <KeyValue label="Campaign contract" value={activeDeployment.campaignContractId} />
+              <KeyValue label="Verifier contract" value={activeDeployment.verifierContractId} />
+              <KeyValue label="AIDUSD/SAC contract" value={activeDeployment.tokenContractId} />
+              <KeyValue label="Campaign ID" value={activeDeployment.campaignId} />
+              <KeyValue label="Verification key hash" value={activeDeployment.verificationKeyHash} />
+            </dl>
+          </TechnicalDetails>
         </div>
       </Panel>
+
+      <div className="pb-2 text-sm leading-6 text-[#9fb0bb]">
+        Testnet prototype. Not production readiness, not production view keys, and not an audited
+        humanitarian compliance system.
+      </div>
     </div>
   );
 }

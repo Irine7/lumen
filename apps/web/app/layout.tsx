@@ -3,9 +3,12 @@ import "./globals.css";
 import { AppShell } from "@/components/app-shell";
 
 export const metadata: Metadata = {
-  title: "Lumen - private aid rails on Stellar",
+  title: "Lumen - private aid accountability",
   description:
-    "Privacy-preserving humanitarian aid disbursements with ZK eligibility proofs on Stellar/Soroban."
+    "Privacy-preserving humanitarian aid disbursements with ZK eligibility proofs on Stellar/Soroban.",
+  icons: {
+    icon: "/logo.png"
+  }
 };
 
 export default function RootLayout({
